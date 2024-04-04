@@ -39,7 +39,12 @@ fn display_board<const BOARDSIZE: usize>(board: &[[Cell; BOARDSIZE]; BOARDSIZE],
     }
     println!();
     for (i, row) in board.iter().enumerate() {
-        print!("{:3} ", i+1);
+        if i > 8 {
+            print!("{:3} ", i+1);
+        } else {
+            let temp_str = String::from("0") + &String::from(char::from_digit((i+1).try_into().unwrap(), 10).expect("Fuck"));
+            print!(" {} ", temp_str);
+        }
         for (_, cell) in row.iter().enumerate() {
             if cell.flagged == false {
                 if cell.hidden == true {
