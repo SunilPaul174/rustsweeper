@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use rand::seq::SliceRandom;
 
-use ansi_term::Colour::{Black, White};
+use ansi_term::{ANSIGenericString, Colour::{Black, White, RGB}};
 
 fn clear() {
     print!("\x1B[2J\x1B[1;1H");
@@ -24,9 +26,7 @@ fn mine_board<const BOARDSIZE: usize>(board: &mut [[Cell; BOARDSIZE]; BOARDSIZE]
     }
 }
 
-fn display_board<const BOARDSIZE: usize>(board: &[[Cell; BOARDSIZE]; BOARDSIZE]) {
-    let hidden_string = Black.on(Black).paint("   ");
-    let flag_string = White.on(Black).paint(" ⚑ ");
+fn display_board<const BOARDSIZE: usize>(board: &[[Cell; BOARDSIZE]; BOARDSIZE], board_objects_map:&HashMap<char, ANSIGenericString<'static, str>>) {
     print!("    ");
     for i in 1..BOARDSIZE+1 {
         let temp: String;
@@ -43,18 +43,18 @@ fn display_board<const BOARDSIZE: usize>(board: &[[Cell; BOARDSIZE]; BOARDSIZE])
         for (_, cell) in row.iter().enumerate() {
             if cell.flagged == false {
                 if cell.hidden == true {
-                    print!("{}", hidden_string);
+                    print!("{}", board_objects_map.get(&'#').expect("Fuck"));
                 } else {
                     if cell.element == '0'{
-                        let temp_str = String::from("   ");
-                        print!("{}", Black.on(White).paint(temp_str))
+                        print!("{}", board_objects_map.get(&' ').expect("Fuck"))
                     } else {
-                        let temp_str = format!(" {} ", cell.element);
-                        print!("{}", Black.on(White).paint(temp_str))
-                    }
+                        // let temp_str = format!(" {} ", cell.element);
+                        let temp_str = board_objects_map.get(&cell.element).expect("Fuck");
+                        print!("{}", temp_str);
+                    }   
                 }
             } else {
-                print!("{}", flag_string);
+                print!("{}", board_objects_map.get(&'⚑').expect("Fuck"));
             }
         }
         println!("");
@@ -206,10 +206,25 @@ fn main() {
         flagged: false
     }; BOARDSIZE]; BOARDSIZE];
 
+    let board_objects_map: HashMap<char, ANSIGenericString<'static, str>> = HashMap::from([
+        ('M', RGB(0, 0, 0).on(White).bold().paint(" 🟐 ")),
+        ('1', RGB(6, 3, 255).on(White).bold().paint(" 1 ")),
+        ('2', RGB(3, 122, 6).on(White).bold().paint(" 2 ")),
+        ('3', RGB(254, 0, 0).on(White).bold().paint(" 3 ")),
+        ('4', RGB(0, 0, 132).on(White).bold().paint(" 4 ")),
+        ('5', RGB(130, 1, 2).on(White).bold().paint(" 5 ")),
+        ('6', RGB(2, 127, 130).on(White).bold().paint(" 6 ")),
+        ('7', RGB(0, 0, 0).on(White).bold().paint(" 7 ")),
+        ('8', RGB(125, 125, 125).on(White).bold().paint(" 8 ")),
+        ('#', Black.on(Black).bold().paint("   ")),
+        ('⚑', White.on(Black).bold().paint(" ⚑ ")),
+        (' ', White.on(White).bold().paint("   "))
+    ]);
+
     mine_board(&mut board);
     make_numbers(&mut board);
     loop {
-        display_board(&board);
+        display_board(&board, &board_objects_map);
         let (row_number, column_number) = get_coord_from_user::<BOARDSIZE>();
         println!("Pick what to do: flag or press (f/p)");
         let choice = get_option_from_user('f', 'p');
@@ -222,7 +237,7 @@ fn main() {
                         j.hidden = false;
                     }
                 }
-                display_board(&board);
+                display_board(&board, &board_objects_map);
                 println!("You died.");
                 return;
             } else {
@@ -234,7 +249,7 @@ fn main() {
                         j.hidden = false;
                     }
                 }
-                display_board(&board);
+                display_board(&board, &board_objects_map);
                 println!("You win!");
                 return;
             }
