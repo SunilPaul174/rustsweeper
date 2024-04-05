@@ -8,7 +8,7 @@ fn clear() {
     print!("\x1B[2J\x1B[1;1H");
 }
 
-fn mine_board<const BOARDSIZE: usize>(board: &mut [[Cell; BOARDSIZE]; BOARDSIZE]) {
+fn mine_board<const BOARDSIZE: usize>(board: &mut Vec<Vec<Cell>>) {
     for row in board {
         let mut indexes: Vec<usize> = vec![];
         for i in 0..BOARDSIZE {
@@ -26,7 +26,7 @@ fn mine_board<const BOARDSIZE: usize>(board: &mut [[Cell; BOARDSIZE]; BOARDSIZE]
     }
 }
 
-fn display_board<const BOARDSIZE: usize>(board: &[[Cell; BOARDSIZE]; BOARDSIZE], board_objects_map:&HashMap<char, ANSIGenericString<'static, str>>) {
+fn display_board<const BOARDSIZE: usize>(board: &Vec<Vec<Cell>>, board_objects_map:&HashMap<char, ANSIGenericString<'static, str>>) {
     print!("    ");
     for i in 1..BOARDSIZE+1 {
         let temp: String;
@@ -102,7 +102,7 @@ fn get_option_from_user(option1: char, option2: char) -> char{
     byte
 }
 
-fn get_around_cell<const BOARDSIZE: usize>(coords: [usize; 2], board: &[[Cell; BOARDSIZE]; BOARDSIZE]) -> Vec<(char, usize, usize)>  {
+fn get_around_cell<const BOARDSIZE: usize>(coords: [usize; 2], board: &Vec<Vec<Cell>>) -> Vec<(char, usize, usize)>  {
     let mut cells: Vec<(char, usize, usize)> =  vec![];
     let iterator = [coords[0] as i32, coords[1] as i32];
     for i in iterator[0]-1..=iterator[0]+1 {
@@ -115,11 +115,11 @@ fn get_around_cell<const BOARDSIZE: usize>(coords: [usize; 2], board: &[[Cell; B
     cells
 }
 
-fn make_numbers<const BOARDSIZE: usize>(board: &mut [[Cell; BOARDSIZE]; BOARDSIZE]) {
+fn make_numbers<const BOARDSIZE: usize>(board: &mut Vec<Vec<Cell>>) {
     let mut board_copy = board.clone();
     for (row_number, row) in board.iter().enumerate() {
         for (column_number, cell) in row.iter().enumerate() {
-            let around = get_around_cell([row_number,column_number], &board);
+            let around = get_around_cell::<BOARDSIZE>([row_number,column_number], &board);
             let mut number = 0;
             for i in around.iter() {
                 if i.0 == 'M' {
@@ -134,7 +134,7 @@ fn make_numbers<const BOARDSIZE: usize>(board: &mut [[Cell; BOARDSIZE]; BOARDSIZ
     *board = board_copy.clone();
 }
 
-fn deobfuscate_board<const BOARDSIZE: usize>(board: &mut [[Cell; BOARDSIZE]; BOARDSIZE], row_number:usize, column_number:usize) {
+fn deobfuscate_board<const BOARDSIZE: usize>(board: &mut Vec<Vec<Cell>>, row_number:usize, column_number:usize) {
     let mut to_check = vec![];
     if board[row_number][column_number].element == '0' {
         to_check.push((row_number, column_number));
@@ -143,7 +143,7 @@ fn deobfuscate_board<const BOARDSIZE: usize>(board: &mut [[Cell; BOARDSIZE]; BOA
     let mut prev_checked: Vec<(usize,usize)> = Vec::new();
     while !to_check.is_empty() {
         for i in to_check.iter() {
-            let around = get_around_cell([i.0,i.1], board);
+            let around = get_around_cell::<BOARDSIZE>([i.0,i.1], board);
             for j in around.iter() {
                 let curr_cell = (j.1,j.2);
                 if !prev_checked.contains(&curr_cell) {
@@ -162,7 +162,7 @@ fn deobfuscate_board<const BOARDSIZE: usize>(board: &mut [[Cell; BOARDSIZE]; BOA
     }
 }
 
-fn event<const BOARDSIZE: usize>(row_number:i32, column_number:i32, board: &mut [[Cell; BOARDSIZE]; BOARDSIZE]) -> char {
+fn event<const BOARDSIZE: usize>(row_number:i32, column_number:i32, board: &mut Vec<Vec<Cell>>) -> char {
     let temp_cell = board[row_number as usize][column_number as usize].element; // sometimes incorrectly detected for some reason
     if temp_cell == 'M' {
         'D'
@@ -171,12 +171,12 @@ fn event<const BOARDSIZE: usize>(row_number:i32, column_number:i32, board: &mut 
         'F'
     } else {
         board[row_number as usize][column_number as usize].hidden = false;
-        deobfuscate_board(board, row_number as usize, column_number as usize);
+        deobfuscate_board::<BOARDSIZE>(board, row_number as usize, column_number as usize);
         'F'
     }
 }
 
-fn flag<const BOARDSIZE: usize>(board: &mut [[Cell; BOARDSIZE]; BOARDSIZE], row_number:usize, column_number:usize) {
+fn flag<const BOARDSIZE: usize>(board: &mut Vec<Vec<Cell>>, row_number:usize, column_number:usize) {
     if !board[row_number][column_number].flagged {
         board[row_number][column_number].flagged = true;
     } else {
@@ -184,7 +184,7 @@ fn flag<const BOARDSIZE: usize>(board: &mut [[Cell; BOARDSIZE]; BOARDSIZE], row_
     }
 }
 
-fn won<const BOARDSIZE: usize>(board: &[[Cell; BOARDSIZE]; BOARDSIZE]) -> bool {
+fn won<const BOARDSIZE: usize>(board: &Vec<Vec<Cell>>) -> bool {
     for i in board.iter() {
         for &j in i.iter() {
             if j.hidden == true && j.element != 'M' {
@@ -205,7 +205,7 @@ struct Cell {
 fn main() {
     clear();
     const BOARDSIZE: usize = 16;
-    let mut board = [[Cell {
+    let mut board = vec![vec![Cell {
         hidden : true,
         element: '0',
         flagged: false
@@ -226,15 +226,15 @@ fn main() {
         (' ', White.on(White).bold().paint("   "))
     ]);
 
-    mine_board(&mut board);
-    make_numbers(&mut board);
+    mine_board::<BOARDSIZE>(&mut board);
+    make_numbers::<BOARDSIZE>(&mut board);
     loop {
-        display_board(&board, &board_objects_map);
+        display_board::<BOARDSIZE>(&board, &board_objects_map);
         let (row_number, column_number) = get_coord_from_user::<BOARDSIZE>();
         println!("Pick what to do: flag or press (f/p)");
         let choice = get_option_from_user('f', 'p');
         if choice == 'p' {
-            let event = event(row_number, column_number, &mut board);
+            let event = event::<BOARDSIZE>(row_number, column_number, &mut board);
             if event == 'D' {
                 clear();
                 for i in board.iter_mut() {
@@ -242,19 +242,19 @@ fn main() {
                         j.hidden = false;
                     }
                 }
-                display_board(&board, &board_objects_map);
+                display_board::<BOARDSIZE>(&board, &board_objects_map);
                 println!("You died.");
                 return;
             } else {
                 clear();
             }
-            if won(&board) {
+            if won::<BOARDSIZE>(&board) {
                 for i in board.iter_mut() {
                     for j in i.iter_mut() {
                         j.hidden = false;
                     }
                 }
-                display_board(&board, &board_objects_map);
+                display_board::<BOARDSIZE>(&board, &board_objects_map);
                 println!("You win!");
                 return;
             }
