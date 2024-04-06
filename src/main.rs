@@ -54,7 +54,6 @@ fn display_board(board: &Vec<Vec<Cell>>, board_objects_map:&HashMap<char, ANSIGe
                     if cell.element == '0'{
                         print!("{}", board_objects_map.get(&' ').expect("Fuck"))
                     } else {
-                        // let temp_str = format!(" {} ", cell.element);
                         let temp_str = board_objects_map.get(&cell.element).expect("Fuck");
                         print!("{}", temp_str);
                     }   
@@ -63,8 +62,25 @@ fn display_board(board: &Vec<Vec<Cell>>, board_objects_map:&HashMap<char, ANSIGe
                 print!("{}", board_objects_map.get(&'⚑').expect("Fuck"));
             }
         }
+        if i > 8 {
+            print!("{:3} ", i+1);
+        } else {
+            let temp_str = String::from("0") + &String::from(char::from_digit((i+1).try_into().unwrap(), 10).expect("Fuck"));
+            print!(" {} ", temp_str);
+        }
         println!("");
     }
+    print!("    ");
+    for i in 1..boardsize+1 {
+        let temp: String;
+        if i < 10 {
+            temp = format!("0{} ", i);
+        } else {
+            temp = format!("{} ", i);
+        }
+        print!("{}", temp);
+    }
+    println!("");
 }
 
 fn get_int_in_range_from_user(l: i32,u: i32, msg: String) -> i32 {
@@ -205,8 +221,7 @@ struct Cell {
 
 fn main() {
     clear();
-    // const BOARDSIZE: usize = 16;
-    let boardsize = get_int_in_range_from_user(0, 100, String::from("Enter board size"));
+    let boardsize = get_int_in_range_from_user(0, 1000, String::from("Enter board size"));
     let mut board = vec![vec![Cell {
         hidden : true,
         element: '0',
