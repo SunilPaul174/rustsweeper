@@ -250,6 +250,7 @@ fn main() {
         let (row_number, column_number) = get_coord_from_user(boardsize.try_into().unwrap());
         println!("Pick what to do: flag or press (f/p)");
         let choice = get_option_from_user('f', 'p');
+        clear();
         if choice == 'p' {
             let event = event(row_number, column_number, &mut board, boardsize.try_into().unwrap());
             if event == 'D' {
