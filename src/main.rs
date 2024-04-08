@@ -4,11 +4,12 @@ use rand::seq::SliceRandom;
 use ansi_term::{ANSIGenericString, Colour::{Black, White, RGB}};
 
 fn clear() {
-    print!("\x1B[2J\x1B[1;1H");
+    // print!("\x1B[2J\x1B[1;1H");
 }
 
 fn mine_board(board: &mut Vec<Vec<Cell>>, boardsize: usize) {
-    for row in board {
+    let mut clear_indexes: Vec<(usize, usize)> = vec![];
+    for (row_number, row) in board.iter_mut().enumerate() {
         let mut indexes: Vec<usize> = vec![];
         for i in 0..boardsize {
             indexes.push(i);
@@ -17,12 +18,20 @@ fn mine_board(board: &mut Vec<Vec<Cell>>, boardsize: usize) {
 
         let mine_number = boardsize / 8;
 
-        let choices: Vec<_> = indexes
+        let choices: Vec<&usize> = indexes
             .choose_multiple(&mut rand::thread_rng(), mine_number)
             .collect();
 
-        for i in choices {
-            row[*i].element = 'M';
+        for i in choices.iter() {
+            row[**i].element = 'M';
+        }
+        for i in indexes.iter() {
+            match choices.iter().position(|&r| r == i) {
+                Some(_) => {},
+                None => {
+                    clear_indexes.push((row_number, *i));
+                }
+            }
         }
     }
 }
