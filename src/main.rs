@@ -4,7 +4,7 @@ use rand::seq::SliceRandom;
 use ansi_term::{ANSIGenericString, Colour::{Black, White, RGB}};
 
 fn clear() {
-    // print!("\x1B[2J\x1B[1;1H");
+    print!("\x1B[2J\x1B[1;1H");
 }
 
 fn mine_board(board: &mut Vec<Vec<Cell>>, boardsize: usize) {
