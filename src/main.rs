@@ -19,6 +19,7 @@ use ansi_term::{
 };
 
 fn clear() {
+    execute!(stdout(), Clear(ClearType::All)).unwrap();
     print!("\x1B[2J\x1B[1;1H");
 }
 
@@ -57,7 +58,7 @@ fn display_board(
     boardsize: usize,
     select_coords: Option<(i32, i32)>,
 ) {
-    clearscreen();
+    clear();
     print!("    ");
     for i in 1..boardsize + 1 {
         let temp: String;
@@ -290,10 +291,6 @@ fn won(board: &Vec<Vec<Cell>>) -> bool {
     true
 }
 
-fn clearscreen() {
-    execute!(stdout(), Clear(ClearType::All)).unwrap();
-}
-
 fn improved_get_coord_from_user(
     board: &Vec<Vec<Cell>>,
     board_objects_map: &HashMap<char, ANSIGenericString<'static, str>>,
@@ -376,7 +373,6 @@ fn improved_get_coord_from_user(
             }) => break,
             _ => {}
         }
-        clear();
         disable_raw_mode().unwrap();
     }
     disable_raw_mode().unwrap();
@@ -427,12 +423,8 @@ fn main() {
     loop {
         let (row_number, column_number) =
             improved_get_coord_from_user(&board, &board_objects_map, boardsize);
-        //println!("({row_number}, {column_number})");
-        //(row_number, column_number) = get_coord_from_user(boardsize as usize); //get_coord_from_user(boardsize as usize);
-        //println!("({row_number}, {column_number})");
         println!("Pick what to do: flag or press (f/p)");
         let choice = get_option_from_user('f', 'p');
-        clear();
         if choice == 'p' {
             let event = event(
                 row_number,
