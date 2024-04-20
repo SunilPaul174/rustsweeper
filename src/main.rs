@@ -1,8 +1,7 @@
 use crossterm::{
-    cursor::MoveTo,
     event::{read, Event, KeyCode, KeyEvent, KeyEventKind},
     execute,
-    style::{self, ResetColor},
+    style::ResetColor,
     terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
     ExecutableCommand,
 };
@@ -14,7 +13,7 @@ use std::{
 };
 
 use ansi_term::{
-    ANSIGenericString, Color,
+    ANSIGenericString,
     Colour::{Black, White, RGB},
 };
 
@@ -142,20 +141,20 @@ fn get_int_in_range_from_user(l: i32, u: i32, msg: String) -> i32 {
     number
 }
 
-fn get_coord_from_user(boardsize: usize) -> (i32, i32) {
-    println!("Enter coordinates");
-    let row = get_int_in_range_from_user(
-        1,
-        (boardsize + 1).try_into().unwrap(),
-        String::from("Enter row coordinate: "),
-    );
-    let col = get_int_in_range_from_user(
-        1,
-        (boardsize + 1).try_into().unwrap(),
-        String::from("Enter column coordinate: "),
-    );
-    (row - 1, col - 1)
-}
+// fn get_coord_from_user(boardsize: usize) -> (i32, i32) {
+//     println!("Enter coordinates");
+//     let row = get_int_in_range_from_user(
+//         1,
+//         (boardsize + 1).try_into().unwrap(),
+//         String::from("Enter row coordinate: "),
+//     );
+//     let col = get_int_in_range_from_user(
+//         1,
+//         (boardsize + 1).try_into().unwrap(),
+//         String::from("Enter column coordinate: "),
+//     );
+//     (row - 1, col - 1)
+// }
 
 fn get_option_from_user(option1: char, option2: char) -> char {
     let mut input = String::new();
@@ -255,7 +254,7 @@ fn event(
     board: &mut Vec<Vec<Cell>>,
     boardsize: usize,
 ) -> char {
-    let temp_cell = board[row_number as usize][column_number as usize].element; // sometimes incorrectly detected for some reason
+    let temp_cell = board[row_number as usize][column_number as usize].element;
     if temp_cell == 'M' {
         'D'
     } else if temp_cell != '0' {
@@ -297,7 +296,8 @@ fn improved_get_coord_from_user(
     board_objects_map: &HashMap<char, ANSIGenericString<'static, str>>,
     boardsize: usize,
 ) -> (i32, i32) {
-    clearscreen();
+    //clearscreen();
+    clear();
     let mut select_coords = ((boardsize / 2) as u16, (boardsize / 2) as u16);
 
     loop {
@@ -331,12 +331,13 @@ fn improved_get_coord_from_user(
             }) => break,
             _ => {}
         }
+        clear();
         disable_raw_mode().unwrap();
     }
     disable_raw_mode().unwrap();
     stdout().execute(ResetColor).unwrap();
 
-    (select_coords.1 as i32, select_coords.0 as i32)
+    (select_coords.1 as i32 -1, select_coords.0 as i32 -1)
 }
 
 #[derive(Copy, Clone)]
@@ -347,7 +348,6 @@ struct Cell {
 }
 
 fn main() {
-    clear();
     let boardsize = get_int_in_range_from_user(0, 1000, String::from("Enter board size"));
     let mut board = vec![
         vec![
@@ -388,7 +388,7 @@ fn main() {
         );
         let (row_number, column_number) =
             improved_get_coord_from_user(&board, &board_objects_map, boardsize as usize); //get_coord_from_user(boardsize as usize);
-        println!("({row_number}, {column_number})");
+        println!("({row_number + 1}, {column_number + 1})");
         println!("Pick what to do: flag or press (f/p)");
         let choice = get_option_from_user('f', 'p');
         clear();
