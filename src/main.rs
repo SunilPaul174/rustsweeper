@@ -10,6 +10,7 @@ use std::{
     cmp::{max, min},
     collections::HashMap,
     io::stdout,
+    process,
 };
 
 use ansi_term::{
@@ -54,8 +55,9 @@ fn display_board(
     board: &Vec<Vec<Cell>>,
     board_objects_map: &HashMap<char, ANSIGenericString<'static, str>>,
     boardsize: usize,
-    select_coords: Option<(u16, u16)>,
+    select_coords: Option<(i32, i32)>,
 ) {
+    clearscreen();
     print!("    ");
     for i in 1..boardsize + 1 {
         let temp: String;
@@ -92,7 +94,7 @@ fn display_board(
                 display_string = board_objects_map.get(&'⚑').expect("Fuck").clone();
             }
             if let Some(select_coords) = select_coords {
-                if j + 1 == select_coords.0.into() && i + 1 == select_coords.1.into() {
+                if j == select_coords.0 as usize && i == select_coords.1 as usize {
                     display_string = ansi_term::Colour::White
                         .on(ansi_term::Colour::RGB(144, 238, 144))
                         .paint("   ");
@@ -120,6 +122,7 @@ fn display_board(
         print!("{}", temp);
     }
     println!("");
+    println!("WASD to move around, Enter to Select, and ESC to exit");
 }
 
 fn get_int_in_range_from_user(l: i32, u: i32, msg: String) -> i32 {
@@ -294,36 +297,78 @@ fn clearscreen() {
 fn improved_get_coord_from_user(
     board: &Vec<Vec<Cell>>,
     board_objects_map: &HashMap<char, ANSIGenericString<'static, str>>,
-    boardsize: usize,
+    boardsize: i32,
 ) -> (i32, i32) {
-    //clearscreen();
-    clear();
-    let mut select_coords = ((boardsize / 2) as u16, (boardsize / 2) as u16);
-
+    let mut select_coords = ((boardsize / 2) as i32, (boardsize / 2) as i32);
+    display_board(
+        board,
+        board_objects_map,
+        boardsize as usize,
+        Some(select_coords),
+    );
     loop {
-        display_board(&board, &board_objects_map, boardsize, Some(select_coords));
         enable_raw_mode().unwrap();
         match read().unwrap() {
             Event::Key(KeyEvent {
                 code: KeyCode::Char('a'),
                 kind: KeyEventKind::Press,
                 ..
-            }) => select_coords.0 = max(1, min(select_coords.0 - 1, boardsize as u16)),
+            }) => {
+                select_coords.0 = max(0, min(select_coords.0 - 1, boardsize - 1));
+                display_board(
+                    board,
+                    board_objects_map,
+                    boardsize as usize,
+                    Some(select_coords),
+                );
+            }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('d'),
                 kind: KeyEventKind::Press,
                 ..
-            }) => select_coords.0 = max(1, min(select_coords.0 + 1, boardsize as u16)),
+            }) => {
+                select_coords.0 = max(0, min(select_coords.0 + 1, boardsize - 1));
+                display_board(
+                    board,
+                    board_objects_map,
+                    boardsize as usize,
+                    Some(select_coords),
+                );
+            }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('w'),
                 kind: KeyEventKind::Press,
                 ..
-            }) => select_coords.1 = max(1, min(select_coords.1 - 1, boardsize as u16)),
+            }) => {
+                select_coords.1 = max(0, min(select_coords.1 - 1, boardsize - 1));
+                display_board(
+                    board,
+                    board_objects_map,
+                    boardsize as usize,
+                    Some(select_coords),
+                );
+            }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('s'),
                 kind: KeyEventKind::Press,
                 ..
-            }) => select_coords.1 = max(1, min(select_coords.1 + 1, boardsize as u16)),
+            }) => {
+                select_coords.1 = max(0, min(select_coords.1 + 1, boardsize - 1));
+                display_board(
+                    board,
+                    board_objects_map,
+                    boardsize as usize,
+                    Some(select_coords),
+                );
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Esc,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                disable_raw_mode().unwrap();
+                process::exit(0);
+            }
             Event::Key(KeyEvent {
                 code: KeyCode::Enter,
                 kind: KeyEventKind::Press,
@@ -337,7 +382,7 @@ fn improved_get_coord_from_user(
     disable_raw_mode().unwrap();
     stdout().execute(ResetColor).unwrap();
 
-    (select_coords.1 as i32 -1, select_coords.0 as i32 -1)
+    (select_coords.1 as i32, select_coords.0 as i32)
 }
 
 #[derive(Copy, Clone)]
@@ -362,7 +407,7 @@ fn main() {
     ];
     clear();
     let board_objects_map: HashMap<char, ANSIGenericString<'static, str>> = HashMap::from([
-        ('M', RGB(0, 0, 0).on(White).bold().paint(" 🟐 ")),
+        ('M', RGB(0, 0, 0).on(White).bold().paint(" 🟐  ")),
         ('1', RGB(6, 3, 255).on(White).bold().paint(" 1 ")),
         ('2', RGB(3, 122, 6).on(White).bold().paint(" 2 ")),
         ('3', RGB(254, 0, 0).on(White).bold().paint(" 3 ")),
@@ -380,15 +425,11 @@ fn main() {
     make_numbers(&mut board, boardsize.try_into().unwrap());
 
     loop {
-        display_board(
-            &board,
-            &board_objects_map,
-            boardsize.try_into().unwrap(),
-            None,
-        );
         let (row_number, column_number) =
-            improved_get_coord_from_user(&board, &board_objects_map, boardsize as usize); //get_coord_from_user(boardsize as usize);
-        println!("({row_number + 1}, {column_number + 1})");
+            improved_get_coord_from_user(&board, &board_objects_map, boardsize);
+        //println!("({row_number}, {column_number})");
+        //(row_number, column_number) = get_coord_from_user(boardsize as usize); //get_coord_from_user(boardsize as usize);
+        //println!("({row_number}, {column_number})");
         println!("Pick what to do: flag or press (f/p)");
         let choice = get_option_from_user('f', 'p');
         clear();
