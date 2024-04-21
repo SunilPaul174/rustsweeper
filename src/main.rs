@@ -48,6 +48,7 @@ fn display_board(
     board: &Vec<Vec<Cell>>,
     board_objects_map: &HashMap<char, ANSIGenericString<'static, str>>,
     select_coords: Option<(i32, i32)>,
+    settings: &Settings,
 ) {
     disable_raw_mode().unwrap();
     clear();
@@ -79,7 +80,11 @@ fn display_board(
         }
         println!("");
     }
-    println!("WASD to move around, C to Click, F to Flag and ESC to exit to main menu");
+    if let InputType::Keyboard = settings.input_type {
+        println!("WASD to move around, C to Click, F to Flag and ESC to exit to main menu");
+    } else {
+        println!("Left Mouse Button to Click, F to Flag and ESC to exit to main menu");
+    }
 }
 
 fn get_around_cell(
@@ -209,65 +214,76 @@ fn get_choice_from_user(
 ) -> (Choice, i32, i32) {
     let mut select_coords = (starting_coords.0, starting_coords.1);
     let choice: Choice;
-    display_board(board, board_objects_map, Some(select_coords));
+    display_board(board, board_objects_map, Some(select_coords), &settings);
+    stdout().execute(EnableMouseCapture).unwrap();
     loop {
         enable_raw_mode().unwrap();
         match read().unwrap() {
-            //Event::Mouse(MouseEvent {
-            //    kind,
-            //    row,
-            //    column,
-            //    modifiers,
-            //}) => {
-            //    //println!("ROW: {row}, COLUMN: {column}, MODIFIERS: {modifiers:?} KIND: {kind:#?}");
-            //}
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                ..
+            }) => {
+                if let InputType::Mouse = settings.input_type {
+                    choice = Choice::Click;
+                    break;
+                }
+            }
+            Event::Mouse(MouseEvent { row, column, .. }) => {
+                if let InputType::Mouse = settings.input_type {
+                    select_coords.1 = max(0, min(column as i32 / 3, settings.width - 1));
+                    select_coords.0 = max(0, min(row as i32, settings.height - 1));
+                    display_board(board, board_objects_map, Some(select_coords), &settings);
+                }
+            }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('a'),
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                select_coords.1 = max(0, min(select_coords.1 - 1, settings.width - 1));
-                display_board(board, board_objects_map, Some(select_coords));
+                if let InputType::Keyboard = settings.input_type {
+                    select_coords.1 = max(0, min(select_coords.1 - 1, settings.width - 1));
+                    display_board(board, board_objects_map, Some(select_coords), &settings);
+                }
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('d'),
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                select_coords.1 = max(0, min(select_coords.1 + 1, settings.width - 1));
-                display_board(board, board_objects_map, Some(select_coords));
+                if let InputType::Keyboard = settings.input_type {
+                    select_coords.1 = max(0, min(select_coords.1 + 1, settings.width - 1));
+                    display_board(board, board_objects_map, Some(select_coords), &settings);
+                }
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('w'),
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                select_coords.0 = max(0, min(select_coords.0 - 1, settings.height - 1));
-                display_board(board, board_objects_map, Some(select_coords));
+                if let InputType::Keyboard = settings.input_type {
+                    select_coords.0 = max(0, min(select_coords.0 - 1, settings.height - 1));
+                    display_board(board, board_objects_map, Some(select_coords), &settings);
+                }
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('s'),
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                select_coords.0 = max(0, min(select_coords.0 + 1, settings.height - 1));
-                display_board(board, board_objects_map, Some(select_coords));
-            }
-            Event::Key(KeyEvent {
-                code: KeyCode::Esc,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                choice = Choice::Exit;
-                break;
+                if let InputType::Keyboard = settings.input_type {
+                    select_coords.0 = max(0, min(select_coords.0 + 1, settings.height - 1));
+                    display_board(board, board_objects_map, Some(select_coords), &settings);
+                }
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('c'),
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                choice = Choice::Click;
-                break;
+                if let InputType::Keyboard = settings.input_type {
+                    choice = Choice::Click;
+                    break;
+                }
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('f'),
@@ -275,6 +291,14 @@ fn get_choice_from_user(
                 ..
             }) => {
                 choice = Choice::Flag;
+                break;
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Esc,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                choice = Choice::Exit;
                 break;
             }
             _ => {}
@@ -446,7 +470,7 @@ fn main_menu() {
                                 j.hidden = false;
                             }
                         }
-                        display_board(&board, &board_objects_map, None);
+                        display_board(&board, &board_objects_map, None, &settings);
                         println!("You died.");
                         return;
                     } else {
@@ -458,12 +482,13 @@ fn main_menu() {
                                 j.hidden = false;
                             }
                         }
-                        display_board(&board, &board_objects_map, None);
+                        display_board(&board, &board_objects_map, None, &settings);
                         println!("You win!");
                         return;
                     }
                 }
                 Choice::Flag => {
+                    //println!("just flagged!");
                     flag(&mut board, row_number as usize, column_number as usize);
                     clear();
                 }
