@@ -150,7 +150,7 @@ fn get_around_cell(
             if !(i == 0 && j == 0)
                 && i >= 0
                 && j >= 0
-                && i < settings.height as i32//May need switching
+                && i < settings.height as i32
                 && j < settings.width as i32
             {
                 cells.push((
@@ -358,8 +358,7 @@ fn get_choice_from_user(
 
     (choice, select_coords.0 as i32, select_coords.1 as i32)
 }
-fn settings() -> Settings {
-    let mut settings = Settings::default();
+fn get_settings(mut settings: Settings) -> Settings {
     let settings_options = vec!["Play", "Difficulty", "Controls", "Exit"];
     loop {
         let setting = Select::with_theme(&ColorfulTheme::default())
@@ -442,10 +441,12 @@ enum Difficulty {
     Normal,
     Hard, //Custom(CustomDifficuly)
 }
+#[derive(Debug, Clone, Copy)]
 enum InputType {
     Mouse,
     Keyboard,
 }
+#[derive(Debug, Clone, Copy)]
 struct Settings {
     mines: i32,
     width: i32,
@@ -462,10 +463,10 @@ impl Default for Settings {
         }
     }
 }
-fn main_menu() {
+fn main_menu(mut settings: Settings) {
     clear();
     loop {
-        let settings = settings();
+        settings = get_settings(settings);
         let mut board = vec![
             vec![
                 Cell {
@@ -488,7 +489,7 @@ fn main_menu() {
             select_coords.1 = column_number;
             match choice {
                 Choice::Exit => {
-                    main_menu();
+                    main_menu(settings.clone());
                 }
                 Choice::Click => {
                     let event = event(row_number, column_number, &mut board, &settings);
@@ -517,7 +518,6 @@ fn main_menu() {
                     }
                 }
                 Choice::Flag => {
-                    //println!("just flagged!");
                     flag(&mut board, row_number as usize, column_number as usize);
                     clear();
                 }
@@ -526,5 +526,5 @@ fn main_menu() {
     }
 }
 fn main() {
-    main_menu();
+    main_menu(Settings::default());
 }
