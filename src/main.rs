@@ -8,7 +8,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
     ExecutableCommand,
 };
-use dialoguer::{theme::ColorfulTheme, Select};
+use dialoguer::{theme::ColorfulTheme, Input, Select};
 use rand::seq::SliceRandom;
 use std::{
     cmp::{max, min},
@@ -16,6 +16,7 @@ use std::{
     io::stdout,
     process,
 };
+use terminal_size::{Height, Width};
 
 use ansi_term::{
     ANSIGenericString,
@@ -390,7 +391,7 @@ fn select_input_type(settings: &mut Settings) {
     settings.input_type = input_type;
 }
 fn select_difficulty(settings: &mut Settings) {
-    let difficulty_options = vec!["Easy", "Normal", "Hard"]; //Todo Add Custom diffiuclty
+    let difficulty_options = vec!["Easy", "Normal", "Hard", "Custom"]; //Todo Add Custom diffiuclty
     let difficulty = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Select Difficulty")
         .items(&difficulty_options)
@@ -400,6 +401,7 @@ fn select_difficulty(settings: &mut Settings) {
         0 => Difficulty::Easy,
         1 => Difficulty::Normal,
         2 => Difficulty::Hard,
+        3 => Difficulty::Custom,
         _ => Difficulty::Easy,
     };
     match difficulty {
@@ -417,6 +419,45 @@ fn select_difficulty(settings: &mut Settings) {
             settings.mines = 99;
             settings.width = 30;
             settings.height = 16;
+        }
+        Difficulty::Custom => {
+            let size = terminal_size::terminal_size().unwrap();
+            let width: u32 = Input::with_theme(&ColorfulTheme::default())
+                .with_prompt(&format!("Board width (max: {})", size.0 .0 / 3))
+                .validate_with(|x: &u32| {
+                    if *x > size.0 .0 as u32 / 3 {
+                        Err("Width entered exceeds the width of your terminal")
+                    } else {
+                        Ok(())
+                    }
+                })
+                .interact()
+                .unwrap();
+            settings.width = width as i32;
+            let height: u32 = Input::with_theme(&ColorfulTheme::default())
+                .with_prompt(&format!("Board height (max: {})", size.1 .0 -2))
+                .validate_with(|x: &u32| {
+                    if *x > size.1 .0 as u32 - 2 {
+                        Err("Height entered exceeds the height of your terminal and the instructions")
+                    } else {
+                        Ok(())
+                    }
+                })
+                .interact()
+                .unwrap();
+            settings.height = height as i32;
+            let mines: u32 = Input::with_theme(&ColorfulTheme::default())
+                .with_prompt("Mine amount")
+                .validate_with(|x: &u32| {
+                    if *x >= width * height {
+                        Err("Mine amount cannot exceed board area")
+                    } else {
+                        Ok(())
+                    }
+                })
+                .interact()
+                .unwrap();
+            settings.mines = mines as i32;
         }
     };
 }
@@ -439,7 +480,8 @@ enum Choice {
 enum Difficulty {
     Easy,
     Normal,
-    Hard, //Custom(CustomDifficuly)
+    Hard,
+    Custom,
 }
 #[derive(Debug, Clone, Copy)]
 enum InputType {
