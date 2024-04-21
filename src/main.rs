@@ -16,7 +16,6 @@ use std::{
     io::stdout,
     process,
 };
-use terminal_size::{Height, Width};
 
 use ansi_term::{
     ANSIGenericString,
