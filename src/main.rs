@@ -5,6 +5,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
     ExecutableCommand,
 };
+use dialoguer::{theme::ColorfulTheme, Select};
 use rand::seq::SliceRandom;
 use std::{
     cmp::{max, min},
@@ -23,35 +24,21 @@ fn clear() {
     print!("\x1B[2J\x1B[1;1H");
 }
 
-fn mine_board(board: &mut Vec<Vec<Cell>>, boardsize: usize) {
-    let mut clear_indexes: Vec<(usize, usize)> = vec![];
-    for (row_number, row) in board.iter_mut().enumerate() {
-        let mut indexes: Vec<usize> = vec![];
-        for i in 0..boardsize {
-            indexes.push(i);
-        }
-        let indexes = indexes.clone();
-
-        let mine_number = (boardsize / 8) + 1;
-
-        let choices: Vec<&usize> = indexes
-            .choose_multiple(&mut rand::thread_rng(), mine_number)
-            .collect();
-
-        for i in choices.iter() {
-            row[**i].element = 'M';
-        }
-        for i in indexes.iter() {
-            match choices.iter().position(|&r| r == i) {
-                Some(_) => {}
-                None => {
-                    clear_indexes.push((row_number, *i));
-                }
-            }
-        }
+fn mine_board(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
+    let cell_amount = settings.width * settings.height;
+    let mut indeces: Vec<usize> = vec![];
+    for i in 0..cell_amount as usize {
+        indeces.push(i);
+    }
+    let choices: Vec<&usize> = indeces
+        .choose_multiple(&mut rand::thread_rng(), settings.mines as usize)
+        .collect();
+    for index in choices {
+        let row_index = index / settings.width as usize;
+        let column_index = index % settings.width as usize;
+        board[row_index][column_index].element = 'M';
     }
 }
-
 fn display_board(
     board: &Vec<Vec<Cell>>,
     board_objects_map: &HashMap<char, ANSIGenericString<'static, str>>,
@@ -77,7 +64,7 @@ fn display_board(
                 display_string = board_objects_map.get(&'⚑').expect("Fuck").clone();
             }
             if let Some(select_coords) = select_coords {
-                if j == select_coords.0 as usize && i == select_coords.1 as usize {
+                if i == select_coords.0 as usize && j == select_coords.1 as usize {
                     display_string = ansi_term::Colour::White
                         .on(ansi_term::Colour::RGB(144, 238, 144))
                         .paint("   ");
@@ -88,25 +75,6 @@ fn display_board(
         println!("");
     }
     println!("WASD to move around, C to Click, F to FLag and ESC to exit");
-}
-
-fn get_int_in_range_from_user(l: i32, u: i32, msg: String) -> i32 {
-    println!("{}", msg);
-    let mut input_text = String::new();
-    std::io::stdin()
-        .read_line(&mut input_text)
-        .expect("failed to read from stdin");
-
-    let trimmed = input_text.trim();
-    let number = match trimmed.parse::<i32>() {
-        Ok(i) => i,
-        Err(..) => -1,
-    };
-
-    if number == -1 || number < l || number > u {
-        return get_int_in_range_from_user(l, u, msg);
-    }
-    number
 }
 
 fn get_around_cell(
@@ -135,11 +103,12 @@ fn get_around_cell(
     cells
 }
 
-fn make_numbers(board: &mut Vec<Vec<Cell>>, boardsize: usize) {
+fn make_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
     let mut board_copy = board.clone();
     for (row_number, row) in board.iter().enumerate() {
         for (column_number, cell) in row.iter().enumerate() {
-            let around = get_around_cell([row_number, column_number], &board, boardsize);
+            let around =
+                get_around_cell([row_number, column_number], &board, settings.width as usize);
             let mut number = 0;
             for i in around.iter() {
                 if i.0 == 'M' {
@@ -230,7 +199,7 @@ fn won(board: &Vec<Vec<Cell>>) -> bool {
 fn get_choice_from_user(
     board: &Vec<Vec<Cell>>,
     board_objects_map: &HashMap<char, ANSIGenericString<'static, str>>,
-    boardsize: i32,
+    settings: &Settings,
     starting_coords: (i32, i32),
 ) -> (Choice, i32, i32) {
     let mut select_coords = (starting_coords.0, starting_coords.1);
@@ -244,7 +213,7 @@ fn get_choice_from_user(
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                select_coords.0 = max(0, min(select_coords.0 - 1, boardsize - 1));
+                select_coords.1 = max(0, min(select_coords.1 - 1, settings.width - 1));
                 display_board(board, board_objects_map, Some(select_coords));
             }
             Event::Key(KeyEvent {
@@ -252,7 +221,7 @@ fn get_choice_from_user(
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                select_coords.0 = max(0, min(select_coords.0 + 1, boardsize - 1));
+                select_coords.1 = max(0, min(select_coords.1 + 1, settings.width - 1));
                 display_board(board, board_objects_map, Some(select_coords));
             }
             Event::Key(KeyEvent {
@@ -260,7 +229,7 @@ fn get_choice_from_user(
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                select_coords.1 = max(0, min(select_coords.1 - 1, boardsize - 1));
+                select_coords.0 = max(0, min(select_coords.0 - 1, settings.height - 1));
                 display_board(board, board_objects_map, Some(select_coords));
             }
             Event::Key(KeyEvent {
@@ -268,7 +237,7 @@ fn get_choice_from_user(
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                select_coords.1 = max(0, min(select_coords.1 + 1, boardsize - 1));
+                select_coords.0 = max(0, min(select_coords.0 + 1, settings.height - 1));
                 display_board(board, board_objects_map, Some(select_coords));
             }
             Event::Key(KeyEvent {
@@ -301,7 +270,7 @@ fn get_choice_from_user(
     disable_raw_mode().unwrap();
     stdout().execute(ResetColor).unwrap();
 
-    (choice, select_coords.1 as i32, select_coords.0 as i32)
+    (choice, select_coords.0 as i32, select_coords.1 as i32)
 }
 
 #[derive(Copy, Clone)]
@@ -315,85 +284,124 @@ enum Choice {
     Flag,
     Exit,
 }
+enum Difficulty {
+    Easy,
+    Normal,
+    Hard, //Custom(CustomDifficuly)
+}
+struct Settings {
+    mines: i32,
+    width: i32,
+    height: i32,
+}
 
 fn main() {
-    let boardsize = get_int_in_range_from_user(0, 1000, String::from("Enter board size"));
-    let mut board = vec![
-        vec![
-            Cell {
-                hidden: true,
-                element: '0',
-                flagged: false
-            };
+    loop {
+        let difficulty_options = vec!["Easy", "Normal", "Hard"]; //Todo Add Custom diffiuclty
+        let difficulty = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select Difficulty")
+            .items(&difficulty_options)
+            .interact()
+            .unwrap();
+        let difficulty = match difficulty {
+            0 => Difficulty::Easy,
+            1 => Difficulty::Normal,
+            2 => Difficulty::Hard,
+            _ => Difficulty::Easy,
+        };
+        let settings = match difficulty {
+            Difficulty::Easy => Settings {
+                mines: 10,
+                width: 8,
+                height: 8,
+            },
+            Difficulty::Normal => Settings {
+                mines: 40,
+                width: 16,
+                height: 16,
+            },
+            Difficulty::Hard => Settings {
+                mines: 99,
+                width: 30,
+                height: 30,
+            },
+        };
+        let boardsize = settings.width;
+        let mut board = vec![
+            vec![
+                Cell {
+                    hidden: true,
+                    element: '0',
+                    flagged: false
+                };
+                boardsize as usize
+            ];
             boardsize as usize
         ];
-        boardsize as usize
-    ];
-    clear();
-    let board_objects_map: HashMap<char, ANSIGenericString<'static, str>> = HashMap::from([
-        ('M', RGB(0, 0, 0).on(White).bold().paint(" 🟐  ")),
-        ('1', RGB(6, 3, 255).on(White).bold().paint(" 1 ")),
-        ('2', RGB(3, 122, 6).on(White).bold().paint(" 2 ")),
-        ('3', RGB(254, 0, 0).on(White).bold().paint(" 3 ")),
-        ('4', RGB(0, 0, 132).on(White).bold().paint(" 4 ")),
-        ('5', RGB(130, 1, 2).on(White).bold().paint(" 5 ")),
-        ('6', RGB(2, 127, 130).on(White).bold().paint(" 6 ")),
-        ('7', RGB(0, 0, 0).on(White).bold().paint(" 7 ")),
-        ('8', RGB(125, 125, 125).on(White).bold().paint(" 8 ")),
-        ('#', Black.on(Black).bold().paint("   ")),
-        ('⚑', White.on(Black).bold().paint(" ⚑ ")),
-        (' ', White.on(White).bold().paint("   ")),
-    ]);
-
-    mine_board(&mut board, boardsize.try_into().unwrap());
-    make_numbers(&mut board, boardsize.try_into().unwrap());
-
-    let mut select_coords = (boardsize / 2 as i32, boardsize / 2 as i32);
-    loop {
-        let (choice, row_number, column_number) =
-            get_choice_from_user(&board, &board_objects_map, boardsize, select_coords);
-        select_coords.0 = column_number;
-        select_coords.1 = row_number;
-        match choice {
-            Choice::Exit => {
-                disable_raw_mode().unwrap();
-                process::exit(0);
-            }
-            Choice::Click => {
-                let event = event(
-                    row_number,
-                    column_number,
-                    &mut board,
-                    boardsize.try_into().unwrap(),
-                );
-                if event == 'D' {
-                    clear();
-                    for i in board.iter_mut() {
-                        for j in i.iter_mut() {
-                            j.hidden = false;
+        clear();
+        let board_objects_map: HashMap<char, ANSIGenericString<'static, str>> = HashMap::from([
+            ('M', RGB(0, 0, 0).on(White).bold().paint(" 🟐  ")),
+            ('1', RGB(6, 3, 255).on(White).bold().paint(" 1 ")),
+            ('2', RGB(3, 122, 6).on(White).bold().paint(" 2 ")),
+            ('3', RGB(254, 0, 0).on(White).bold().paint(" 3 ")),
+            ('4', RGB(0, 0, 132).on(White).bold().paint(" 4 ")),
+            ('5', RGB(130, 1, 2).on(White).bold().paint(" 5 ")),
+            ('6', RGB(2, 127, 130).on(White).bold().paint(" 6 ")),
+            ('7', RGB(0, 0, 0).on(White).bold().paint(" 7 ")),
+            ('8', RGB(125, 125, 125).on(White).bold().paint(" 8 ")),
+            ('#', Black.on(Black).bold().paint("   ")),
+            ('⚑', White.on(Black).bold().paint(" ⚑ ")),
+            (' ', White.on(White).bold().paint("   ")),
+        ]);
+        mine_board(&mut board, &settings);
+        make_numbers(&mut board, &settings);
+        let mut select_coords = (settings.width / 2 as i32, settings.height / 2 as i32);
+        loop {
+            let (choice, row_number, column_number) =
+                get_choice_from_user(&board, &board_objects_map, &settings, select_coords);
+            select_coords.0 = row_number;
+            select_coords.1 = column_number;
+            match choice {
+                Choice::Exit => {
+                    disable_raw_mode().unwrap();
+                    process::exit(0);
+                }
+                Choice::Click => {
+                    let event = event(
+                        row_number,
+                        column_number,
+                        &mut board,
+                        boardsize.try_into().unwrap(),
+                    );
+                    if event == 'D' {
+                        clear();
+                        for i in board.iter_mut() {
+                            for j in i.iter_mut() {
+                                j.hidden = false;
+                            }
                         }
+                        display_board(&board, &board_objects_map, None);
+                        println!("You died.");
+                        return;
+                    } else {
+                        clear();
                     }
-                    display_board(&board, &board_objects_map, None);
-                    println!("You died.");
-                    return;
-                } else {
+                    if won(&board) {
+                        for i in board.iter_mut() {
+                            for j in i.iter_mut() {
+                                j.hidden = false;
+                            }
+                        }
+                        display_board(&board, &board_objects_map, None);
+                        println!("You win!");
+                        return;
+                    }
+                }
+                Choice::Flag => {
+                    flag(&mut board, row_number as usize, column_number as usize);
                     clear();
                 }
-                if won(&board) {
-                    for i in board.iter_mut() {
-                        for j in i.iter_mut() {
-                            j.hidden = false;
-                        }
-                    }
-                    display_board(&board, &board_objects_map, None);
-                    println!("You win!");
-                    return;
-                }
-            }
-            Choice::Flag => {
-                flag(&mut board, row_number as usize, column_number as usize);
-                clear();
-            }
-        };
+            };
+        }
     }
 }
