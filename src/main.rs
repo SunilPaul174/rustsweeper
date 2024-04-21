@@ -55,30 +55,11 @@ fn mine_board(board: &mut Vec<Vec<Cell>>, boardsize: usize) {
 fn display_board(
     board: &Vec<Vec<Cell>>,
     board_objects_map: &HashMap<char, ANSIGenericString<'static, str>>,
-    boardsize: usize,
     select_coords: Option<(i32, i32)>,
 ) {
     disable_raw_mode().unwrap();
     clear();
-    print!("    ");
-    for i in 1..boardsize + 1 {
-        let temp: String;
-        if i < 10 {
-            temp = format!("0{} ", i);
-        } else {
-            temp = format!("{} ", i);
-        }
-        print!("{}", temp);
-    }
-    println!();
     for (i, row) in board.iter().enumerate() {
-        if i > 8 {
-            print!("{:3} ", i + 1);
-        } else {
-            let temp_str = String::from("0")
-                + &String::from(char::from_digit((i + 1).try_into().unwrap(), 10).expect("Fuck"));
-            print!(" {} ", temp_str);
-        }
         for (j, cell) in row.iter().enumerate() {
             let mut display_string;
             if cell.flagged == false {
@@ -104,27 +85,9 @@ fn display_board(
             }
             print!("{display_string}");
         }
-        if i > 8 {
-            print!("{:3} ", i + 1);
-        } else {
-            let temp_str = String::from("0")
-                + &String::from(char::from_digit((i + 1).try_into().unwrap(), 10).expect("Fuck"));
-            print!(" {} ", temp_str);
-        }
         println!("");
     }
-    print!("    ");
-    for i in 1..boardsize + 1 {
-        let temp: String;
-        if i < 10 {
-            temp = format!("0{} ", i);
-        } else {
-            temp = format!("{} ", i);
-        }
-        print!("{}", temp);
-    }
-    println!("");
-    println!("WASD to move around, Enter to Select, and ESC to exit");
+    println!("WASD to move around, C to Click, F to FLag and ESC to exit");
 }
 
 fn get_int_in_range_from_user(l: i32, u: i32, msg: String) -> i32 {
@@ -144,34 +107,6 @@ fn get_int_in_range_from_user(l: i32, u: i32, msg: String) -> i32 {
         return get_int_in_range_from_user(l, u, msg);
     }
     number
-}
-
-// fn get_coord_from_user(boardsize: usize) -> (i32, i32) {
-//     println!("Enter coordinates");
-//     let row = get_int_in_range_from_user(
-//         1,
-//         (boardsize + 1).try_into().unwrap(),
-//         String::from("Enter row coordinate: "),
-//     );
-//     let col = get_int_in_range_from_user(
-//         1,
-//         (boardsize + 1).try_into().unwrap(),
-//         String::from("Enter column coordinate: "),
-//     );
-//     (row - 1, col - 1)
-// }
-
-fn get_option_from_user(option1: char, option2: char) -> char {
-    let mut input = String::new();
-    std::io::stdin()
-        .read_line(&mut input)
-        .ok()
-        .expect("Failed to read line");
-    let byte: char = input.bytes().nth(0).expect("no byte read") as char;
-    if byte != option1 && byte != option2 {
-        return get_option_from_user(option1, option2);
-    }
-    byte
 }
 
 fn get_around_cell(
@@ -292,18 +227,15 @@ fn won(board: &Vec<Vec<Cell>>) -> bool {
     true
 }
 
-fn improved_get_coord_from_user(
+fn get_choice_from_user(
     board: &Vec<Vec<Cell>>,
     board_objects_map: &HashMap<char, ANSIGenericString<'static, str>>,
     boardsize: i32,
-) -> (i32, i32) {
-    let mut select_coords = ((boardsize / 2) as i32, (boardsize / 2) as i32);
-    display_board(
-        board,
-        board_objects_map,
-        boardsize as usize,
-        Some(select_coords),
-    );
+    starting_coords: (i32, i32),
+) -> (Choice, i32, i32) {
+    let mut select_coords = (starting_coords.0, starting_coords.1);
+    let choice: Choice;
+    display_board(board, board_objects_map, Some(select_coords));
     loop {
         enable_raw_mode().unwrap();
         match read().unwrap() {
@@ -313,12 +245,7 @@ fn improved_get_coord_from_user(
                 ..
             }) => {
                 select_coords.0 = max(0, min(select_coords.0 - 1, boardsize - 1));
-                display_board(
-                    board,
-                    board_objects_map,
-                    boardsize as usize,
-                    Some(select_coords),
-                );
+                display_board(board, board_objects_map, Some(select_coords));
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('d'),
@@ -326,12 +253,7 @@ fn improved_get_coord_from_user(
                 ..
             }) => {
                 select_coords.0 = max(0, min(select_coords.0 + 1, boardsize - 1));
-                display_board(
-                    board,
-                    board_objects_map,
-                    boardsize as usize,
-                    Some(select_coords),
-                );
+                display_board(board, board_objects_map, Some(select_coords));
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('w'),
@@ -339,12 +261,7 @@ fn improved_get_coord_from_user(
                 ..
             }) => {
                 select_coords.1 = max(0, min(select_coords.1 - 1, boardsize - 1));
-                display_board(
-                    board,
-                    board_objects_map,
-                    boardsize as usize,
-                    Some(select_coords),
-                );
+                display_board(board, board_objects_map, Some(select_coords));
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('s'),
@@ -352,33 +269,39 @@ fn improved_get_coord_from_user(
                 ..
             }) => {
                 select_coords.1 = max(0, min(select_coords.1 + 1, boardsize - 1));
-                display_board(
-                    board,
-                    board_objects_map,
-                    boardsize as usize,
-                    Some(select_coords),
-                );
+                display_board(board, board_objects_map, Some(select_coords));
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Esc,
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                disable_raw_mode().unwrap();
-                process::exit(0);
+                choice = Choice::Exit;
+                break;
             }
             Event::Key(KeyEvent {
-                code: KeyCode::Enter,
+                code: KeyCode::Char('c'),
                 kind: KeyEventKind::Press,
                 ..
-            }) => break,
+            }) => {
+                choice = Choice::Click;
+                break;
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('f'),
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                choice = Choice::Flag;
+                break;
+            }
             _ => {}
         }
     }
     disable_raw_mode().unwrap();
     stdout().execute(ResetColor).unwrap();
 
-    (select_coords.1 as i32, select_coords.0 as i32)
+    (choice, select_coords.1 as i32, select_coords.0 as i32)
 }
 
 #[derive(Copy, Clone)]
@@ -386,6 +309,11 @@ struct Cell {
     hidden: bool,
     element: char,
     flagged: bool,
+}
+enum Choice {
+    Click,
+    Flag,
+    Exit,
 }
 
 fn main() {
@@ -420,54 +348,52 @@ fn main() {
     mine_board(&mut board, boardsize.try_into().unwrap());
     make_numbers(&mut board, boardsize.try_into().unwrap());
 
+    let mut select_coords = (boardsize / 2 as i32, boardsize / 2 as i32);
     loop {
-        let (row_number, column_number) =
-            improved_get_coord_from_user(&board, &board_objects_map, boardsize);
-        println!("Pick what to do: flag or press (f/p)");
-        let choice = get_option_from_user('f', 'p');
-        if choice == 'p' {
-            let event = event(
-                row_number,
-                column_number,
-                &mut board,
-                boardsize.try_into().unwrap(),
-            );
-            if event == 'D' {
-                clear();
-                for i in board.iter_mut() {
-                    for j in i.iter_mut() {
-                        j.hidden = false;
-                    }
-                }
-                display_board(
-                    &board,
-                    &board_objects_map,
+        let (choice, row_number, column_number) =
+            get_choice_from_user(&board, &board_objects_map, boardsize, select_coords);
+        select_coords.0 = column_number;
+        select_coords.1 = row_number;
+        match choice {
+            Choice::Exit => {
+                disable_raw_mode().unwrap();
+                process::exit(0);
+            }
+            Choice::Click => {
+                let event = event(
+                    row_number,
+                    column_number,
+                    &mut board,
                     boardsize.try_into().unwrap(),
-                    None,
                 );
-                println!("You died.");
-                return;
-            } else {
+                if event == 'D' {
+                    clear();
+                    for i in board.iter_mut() {
+                        for j in i.iter_mut() {
+                            j.hidden = false;
+                        }
+                    }
+                    display_board(&board, &board_objects_map, None);
+                    println!("You died.");
+                    return;
+                } else {
+                    clear();
+                }
+                if won(&board) {
+                    for i in board.iter_mut() {
+                        for j in i.iter_mut() {
+                            j.hidden = false;
+                        }
+                    }
+                    display_board(&board, &board_objects_map, None);
+                    println!("You win!");
+                    return;
+                }
+            }
+            Choice::Flag => {
+                flag(&mut board, row_number as usize, column_number as usize);
                 clear();
             }
-            if won(&board) {
-                for i in board.iter_mut() {
-                    for j in i.iter_mut() {
-                        j.hidden = false;
-                    }
-                }
-                display_board(
-                    &board,
-                    &board_objects_map,
-                    boardsize.try_into().unwrap(),
-                    None,
-                );
-                println!("You win!");
-                return;
-            }
-        } else {
-            flag(&mut board, row_number as usize, column_number as usize);
-            clear();
-        }
+        };
     }
 }
