@@ -58,6 +58,7 @@ fn display_board(
     boardsize: usize,
     select_coords: Option<(i32, i32)>,
 ) {
+    disable_raw_mode().unwrap();
     clear();
     print!("    ");
     for i in 1..boardsize + 1 {
@@ -373,7 +374,6 @@ fn improved_get_coord_from_user(
             }) => break,
             _ => {}
         }
-        disable_raw_mode().unwrap();
     }
     disable_raw_mode().unwrap();
     stdout().execute(ResetColor).unwrap();
