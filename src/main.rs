@@ -1,7 +1,7 @@
 use crossterm::{
     event::{
-        read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
-        MouseButton, MouseEvent, MouseEventKind,
+        read, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent,
+        MouseEventKind,
     },
     execute,
     style::ResetColor,
@@ -141,7 +141,7 @@ fn get_display_string(character: char, is_green: bool) -> ANSIGenericString<'sta
 fn get_around_cell(
     coords: [usize; 2],
     board: &Vec<Vec<Cell>>,
-    boardsize: usize,
+    settings: &Settings,
 ) -> Vec<(char, usize, usize)> {
     let mut cells: Vec<(char, usize, usize)> = vec![];
     let iterator = [coords[0] as i32, coords[1] as i32];
@@ -150,8 +150,8 @@ fn get_around_cell(
             if !(i == 0 && j == 0)
                 && i >= 0
                 && j >= 0
-                && i < boardsize as i32
-                && j < boardsize as i32
+                && i < settings.height as i32//May need switching
+                && j < settings.width as i32
             {
                 cells.push((
                     board[i as usize][j as usize].element,
@@ -168,8 +168,7 @@ fn make_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
     let mut board_copy = board.clone();
     for (row_number, row) in board.iter().enumerate() {
         for (column_number, cell) in row.iter().enumerate() {
-            let around =
-                get_around_cell([row_number, column_number], &board, settings.width as usize);
+            let around = get_around_cell([row_number, column_number], &board, &settings);
             let mut number = 0;
             for i in around.iter() {
                 if i.0 == 'M' {
@@ -189,7 +188,7 @@ fn deobfuscate_board(
     board: &mut Vec<Vec<Cell>>,
     row_number: usize,
     column_number: usize,
-    boardsize: usize,
+    settings: &Settings,
 ) {
     let mut to_check = vec![];
     if board[row_number][column_number].element == '0' {
@@ -199,7 +198,7 @@ fn deobfuscate_board(
     let mut prev_checked: Vec<(usize, usize)> = Vec::new();
     while !to_check.is_empty() {
         for i in to_check.iter() {
-            let around = get_around_cell([i.0, i.1], board, boardsize);
+            let around = get_around_cell([i.0, i.1], board, &settings);
             for j in around.iter() {
                 let curr_cell = (j.1, j.2);
                 if !prev_checked.contains(&curr_cell) {
@@ -222,7 +221,7 @@ fn event(
     row_number: i32,
     column_number: i32,
     board: &mut Vec<Vec<Cell>>,
-    boardsize: usize,
+    settings: &Settings,
 ) -> char {
     let temp_cell = board[row_number as usize][column_number as usize].element;
     if temp_cell == 'M' {
@@ -236,7 +235,7 @@ fn event(
             board,
             row_number as usize,
             column_number as usize,
-            boardsize,
+            &settings,
         );
         'F'
     }
@@ -411,14 +410,14 @@ fn select_difficulty(settings: &mut Settings) {
             settings.height = 8;
         }
         Difficulty::Normal => {
-            settings.mines = 3;
+            settings.mines = 40;
             settings.width = 16;
             settings.height = 16;
         }
         Difficulty::Hard => {
             settings.mines = 99;
             settings.width = 30;
-            settings.height = 30;
+            settings.height = 16;
         }
     };
 }
@@ -467,7 +466,6 @@ fn main_menu() {
     clear();
     loop {
         let settings = settings();
-        let boardsize = settings.width;
         let mut board = vec![
             vec![
                 Cell {
@@ -475,9 +473,9 @@ fn main_menu() {
                     element: '0',
                     flagged: false
                 };
-                boardsize as usize
+                settings.width as usize
             ];
-            boardsize as usize
+            settings.height as usize
         ];
         clear();
         mine_board(&mut board, &settings);
@@ -493,12 +491,7 @@ fn main_menu() {
                     main_menu();
                 }
                 Choice::Click => {
-                    let event = event(
-                        row_number,
-                        column_number,
-                        &mut board,
-                        boardsize.try_into().unwrap(),
-                    );
+                    let event = event(row_number, column_number, &mut board, &settings);
                     if event == 'D' {
                         clear();
                         for i in board.iter_mut() {
