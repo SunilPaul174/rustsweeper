@@ -1,5 +1,8 @@
 use crossterm::{
-    event::{read, Event, KeyCode, KeyEvent, KeyEventKind},
+    event::{
+        read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
+        MouseButton, MouseEvent, MouseEventKind,
+    },
     execute,
     style::ResetColor,
     terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
@@ -20,6 +23,8 @@ use ansi_term::{
 };
 
 fn clear() {
+    execute!(stdout(), Clear(ClearType::All)).unwrap();
+    print!("\x1B[2J\x1B[1;1H");
     execute!(stdout(), Clear(ClearType::All)).unwrap();
     print!("\x1B[2J\x1B[1;1H");
 }
@@ -74,7 +79,7 @@ fn display_board(
         }
         println!("");
     }
-    println!("WASD to move around, C to Click, F to FLag and ESC to exit");
+    println!("WASD to move around, C to Click, F to Flag and ESC to exit to main menu");
 }
 
 fn get_around_cell(
@@ -208,6 +213,14 @@ fn get_choice_from_user(
     loop {
         enable_raw_mode().unwrap();
         match read().unwrap() {
+            //Event::Mouse(MouseEvent {
+            //    kind,
+            //    row,
+            //    column,
+            //    modifiers,
+            //}) => {
+            //    //println!("ROW: {row}, COLUMN: {column}, MODIFIERS: {modifiers:?} KIND: {kind:#?}");
+            //}
             Event::Key(KeyEvent {
                 code: KeyCode::Char('a'),
                 kind: KeyEventKind::Press,
@@ -272,7 +285,74 @@ fn get_choice_from_user(
 
     (choice, select_coords.0 as i32, select_coords.1 as i32)
 }
-
+fn settings() -> Settings {
+    let mut settings = Settings::default();
+    let settings_options = vec!["Play", "Difficulty", "Controls", "Exit"];
+    loop {
+        let setting = Select::with_theme(&ColorfulTheme::default())
+            .items(&settings_options)
+            .interact()
+            .unwrap();
+        match setting {
+            0 => break,
+            1 => select_difficulty(&mut settings),
+            2 => select_input_type(&mut settings),
+            3 => exit_gracefully(),
+            _ => {}
+        }
+    }
+    settings
+}
+fn select_input_type(settings: &mut Settings) {
+    let input_options = vec!["Mouse", "Keyboard"]; //Todo Add Custom diffiuclty
+    let input_type = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select Input Type")
+        .items(&input_options)
+        .interact()
+        .unwrap();
+    let input_type = match input_type {
+        0 => InputType::Mouse,
+        1 => InputType::Keyboard,
+        _ => InputType::Mouse,
+    };
+    settings.input_type = input_type;
+}
+fn select_difficulty(settings: &mut Settings) {
+    let difficulty_options = vec!["Easy", "Normal", "Hard"]; //Todo Add Custom diffiuclty
+    let difficulty = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select Difficulty")
+        .items(&difficulty_options)
+        .interact()
+        .unwrap();
+    let difficulty = match difficulty {
+        0 => Difficulty::Easy,
+        1 => Difficulty::Normal,
+        2 => Difficulty::Hard,
+        _ => Difficulty::Easy,
+    };
+    match difficulty {
+        Difficulty::Easy => {
+            settings.mines = 10;
+            settings.width = 8;
+            settings.height = 8;
+        }
+        Difficulty::Normal => {
+            settings.mines = 40;
+            settings.width = 16;
+            settings.height = 16;
+        }
+        Difficulty::Hard => {
+            settings.mines = 99;
+            settings.width = 30;
+            settings.height = 30;
+        }
+    };
+}
+fn exit_gracefully() {
+    disable_raw_mode().unwrap();
+    stdout().execute(ResetColor).unwrap();
+    process::exit(0);
+}
 #[derive(Copy, Clone)]
 struct Cell {
     hidden: bool,
@@ -289,43 +369,30 @@ enum Difficulty {
     Normal,
     Hard, //Custom(CustomDifficuly)
 }
+enum InputType {
+    Mouse,
+    Keyboard,
+}
 struct Settings {
     mines: i32,
     width: i32,
     height: i32,
+    input_type: InputType,
 }
-
-fn main() {
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            mines: 10,
+            width: 8,
+            height: 8,
+            input_type: InputType::Mouse,
+        }
+    }
+}
+fn main_menu() {
+    clear();
     loop {
-        let difficulty_options = vec!["Easy", "Normal", "Hard"]; //Todo Add Custom diffiuclty
-        let difficulty = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Select Difficulty")
-            .items(&difficulty_options)
-            .interact()
-            .unwrap();
-        let difficulty = match difficulty {
-            0 => Difficulty::Easy,
-            1 => Difficulty::Normal,
-            2 => Difficulty::Hard,
-            _ => Difficulty::Easy,
-        };
-        let settings = match difficulty {
-            Difficulty::Easy => Settings {
-                mines: 10,
-                width: 8,
-                height: 8,
-            },
-            Difficulty::Normal => Settings {
-                mines: 40,
-                width: 16,
-                height: 16,
-            },
-            Difficulty::Hard => Settings {
-                mines: 99,
-                width: 30,
-                height: 30,
-            },
-        };
+        let settings = settings();
         let boardsize = settings.width;
         let mut board = vec![
             vec![
@@ -363,8 +430,7 @@ fn main() {
             select_coords.1 = column_number;
             match choice {
                 Choice::Exit => {
-                    disable_raw_mode().unwrap();
-                    process::exit(0);
+                    main_menu();
                 }
                 Choice::Click => {
                     let event = event(
@@ -404,4 +470,7 @@ fn main() {
             };
         }
     }
+}
+fn main() {
+    main_menu();
 }
