@@ -1,4 +1,5 @@
 use crossterm::{
+    cursor::{MoveTo, RestorePosition, SavePosition},
     event::{
         read, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent,
         MouseEventKind,
@@ -49,27 +50,13 @@ fn display_board(board: &Vec<Vec<Cell>>, select_coords: Option<(i32, i32)>, sett
     clear();
     for (i, row) in board.iter().enumerate() {
         for (j, cell) in row.iter().enumerate() {
-            let display_string;
             let mut is_green = false;
             if let Some(select_coords) = select_coords {
                 if i == select_coords.0 as usize && j == select_coords.1 as usize {
                     is_green = true;
                 }
             }
-            if cell.flagged == false {
-                if cell.hidden == true {
-                    display_string = get_display_string('#', is_green);
-                } else {
-                    if cell.element == '0' {
-                        display_string = get_display_string(' ', is_green);
-                    } else {
-                        display_string = get_display_string(cell.element, is_green);
-                    }
-                }
-            } else {
-                display_string = get_display_string('⚑', is_green);
-            }
-            print!("{display_string}");
+            display_cell(cell, is_green);
         }
         println!("");
     }
@@ -78,6 +65,23 @@ fn display_board(board: &Vec<Vec<Cell>>, select_coords: Option<(i32, i32)>, sett
     } else {
         println!("Left Mouse Button to Click, F to Flag and ESC to exit to main menu");
     }
+}
+fn display_cell(cell: &Cell, is_green: bool) {
+    let display_string;
+    if cell.flagged == false {
+        if cell.hidden == true {
+            display_string = get_display_string('#', is_green);
+        } else {
+            if cell.element == '0' {
+                display_string = get_display_string(' ', is_green);
+            } else {
+                display_string = get_display_string(cell.element, is_green);
+            }
+        }
+    } else {
+        display_string = get_display_string('⚑', is_green);
+    }
+    print!("{display_string}");
 }
 fn get_display_string(character: char, is_green: bool) -> ANSIGenericString<'static, str> {
     let board_objects_map: HashMap<char, ANSIGenericString<'static, str>>;
@@ -262,6 +266,11 @@ fn get_choice_from_user(
     starting_coords: (i32, i32),
 ) -> (Choice, i32, i32) {
     let mut select_coords = (starting_coords.0, starting_coords.1);
+    let mut previous_cell_data: (Cell, i32, i32) = (
+        board[select_coords.0 as usize][select_coords.1 as usize],
+        select_coords.0,
+        select_coords.1,
+    );
     let choice: Choice;
     display_board(board, Some(select_coords), &settings);
     stdout().execute(EnableMouseCapture).unwrap();
@@ -279,9 +288,31 @@ fn get_choice_from_user(
             }
             Event::Mouse(MouseEvent { row, column, .. }) => {
                 if let InputType::Mouse = settings.input_type {
+                    stdout().execute(SavePosition).unwrap();
+                    stdout()
+                        .execute(MoveTo(
+                            (previous_cell_data.2 * 3) as u16,
+                            (previous_cell_data.1) as u16,
+                        ))
+                        .unwrap();
+                    display_cell(&previous_cell_data.0, false);
+                    stdout().execute(RestorePosition).unwrap();
                     select_coords.1 = max(0, min(column as i32 / 3, settings.width - 1));
                     select_coords.0 = max(0, min(row as i32, settings.height - 1));
-                    display_board(board, Some(select_coords), &settings);
+                    previous_cell_data = (
+                        board[select_coords.0 as usize][select_coords.1 as usize],
+                        select_coords.0,
+                        select_coords.1,
+                    );
+                    stdout().execute(SavePosition).unwrap();
+                    stdout()
+                        .execute(MoveTo(
+                            (previous_cell_data.2 * 3) as u16,
+                            (previous_cell_data.1) as u16,
+                        ))
+                        .unwrap();
+                    display_cell(&previous_cell_data.0, true);
+                    stdout().execute(RestorePosition).unwrap();
                 }
             }
             Event::Key(KeyEvent {
@@ -465,7 +496,7 @@ fn exit_gracefully() {
     stdout().execute(ResetColor).unwrap();
     process::exit(0);
 }
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 struct Cell {
     hidden: bool,
     element: char,
