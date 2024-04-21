@@ -16,7 +16,7 @@ fn mine_board(board: &mut Vec<Vec<Cell>>, boardsize: usize) {
         }
         let indexes = indexes.clone();
 
-        let mine_number = boardsize / 8;
+        let mine_number = (boardsize / 8) + 1;
 
         let choices: Vec<&usize> = indexes
             .choose_multiple(&mut rand::thread_rng(), mine_number)
