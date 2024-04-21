@@ -463,10 +463,13 @@ impl Default for Settings {
         }
     }
 }
-fn main_menu(mut settings: Settings) {
+fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
     clear();
     loop {
-        settings = get_settings(settings);
+        if !go_directly_to_game {
+            settings = get_settings(settings);
+        }
+
         let mut board = vec![
             vec![
                 Cell {
@@ -489,7 +492,7 @@ fn main_menu(mut settings: Settings) {
             select_coords.1 = column_number;
             match choice {
                 Choice::Exit => {
-                    main_menu(settings.clone());
+                    main_menu(settings.clone(), false);
                 }
                 Choice::Click => {
                     let event = event(row_number, column_number, &mut board, &settings);
@@ -502,7 +505,7 @@ fn main_menu(mut settings: Settings) {
                         }
                         display_board(&board, None, &settings);
                         println!("You died.");
-                        return;
+                        break;
                     } else {
                         clear();
                     }
@@ -514,7 +517,7 @@ fn main_menu(mut settings: Settings) {
                         }
                         display_board(&board, None, &settings);
                         println!("You win!");
-                        return;
+                        break;
                     }
                 }
                 Choice::Flag => {
@@ -523,8 +526,19 @@ fn main_menu(mut settings: Settings) {
                 }
             };
         }
+        let options = vec!["Play Again", "Main Menu", "Exit"];
+        let choice = Select::with_theme(&ColorfulTheme::default())
+            .items(&options)
+            .interact()
+            .unwrap();
+        match choice {
+            0 => main_menu(settings.clone(), true),
+            1 => main_menu(settings.clone(), false),
+            2 => exit_gracefully(),
+            _ => {}
+        }
     }
 }
 fn main() {
-    main_menu(Settings::default());
+    main_menu(Settings::default(), false);
 }
