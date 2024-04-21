@@ -83,7 +83,7 @@ fn get_display_string(character: char, is_green: bool) -> ANSIGenericString<'sta
     let board_objects_map: HashMap<char, ANSIGenericString<'static, str>>;
     if !is_green {
         board_objects_map = HashMap::from([
-            ('M', RGB(0, 0, 0).on(White).bold().paint(" 🟐 ")),
+            ('M', RGB(0, 0, 0).on(White).bold().paint(" ✹ ")),
             ('1', RGB(6, 3, 255).on(White).bold().paint(" 1 ")),
             ('2', RGB(3, 122, 6).on(White).bold().paint(" 2 ")),
             ('3', RGB(254, 0, 0).on(White).bold().paint(" 3 ")),
@@ -98,7 +98,7 @@ fn get_display_string(character: char, is_green: bool) -> ANSIGenericString<'sta
         ]);
     } else {
         board_objects_map = HashMap::from([
-            ('M', RGB(0, 0, 0).on(RGB(144, 238, 144)).bold().paint(" 🟐 ")),
+            ('M', RGB(0, 0, 0).on(RGB(144, 238, 144)).bold().paint(" ✹ ")),
             (
                 '1',
                 RGB(6, 3, 255).on(RGB(144, 238, 144)).bold().paint(" 1 "),
