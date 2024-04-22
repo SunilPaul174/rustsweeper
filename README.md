@@ -10,7 +10,7 @@ This repository contains a basic command-line Minesweeper program written in Rus
 
 You can play the game by either downloading the executable or building it yourself. 
 
-You can find the latest releases (with executables) [here](https://github.com/AidenPierce616/rustsweeper/releases)
+You can find the latest releases (with executables) [here](https://github.com/AidenPierce616/rustsweeper/releases).
 
 To build it, please take a look at the section below.
 ## Building
