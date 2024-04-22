@@ -503,7 +503,7 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
         clear();
         place_mines(&mut board, &settings);
         place_numbers(&mut board, &settings);
-        let mut select_coords = (settings.width / 2 as i32, settings.height / 2 as i32);
+        let mut select_coords = (settings.height / 2 as i32, settings.width / 2 as i32);
         loop {
             let (choice, row_number, column_number) =
                 get_choice_from_user(&mut board, &settings, select_coords);
