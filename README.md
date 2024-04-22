@@ -15,7 +15,7 @@ You can find the latest releases (with executables) [here](https://github.com/Ai
 To build it, please take a look at the section below.
 ## Building
 
-To play the Minesweeper game, you need to have Rust installed on your system. If Rust is not installed, you can download and install it from [here](https://www.rust-lang.org/tools/install).
+To build Rustsweeper, you need to have Rust installed on your system. If Rust is not installed, you can download and install it from [here](https://www.rust-lang.org/tools/install).
 
 Once Rust is installed, follow these steps:
 
