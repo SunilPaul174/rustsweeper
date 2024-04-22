@@ -30,7 +30,7 @@ fn clear() {
     print!("\x1B[2J\x1B[1;1H");
 }
 
-fn mine_board(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
+fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
     let cell_amount = settings.width * settings.height;
     let mut indeces: Vec<usize> = vec![];
     for i in 0..cell_amount as usize {
@@ -50,13 +50,13 @@ fn display_board(board: &Vec<Vec<Cell>>, select_coords: Option<(i32, i32)>, sett
     clear();
     for (i, row) in board.iter().enumerate() {
         for (j, cell) in row.iter().enumerate() {
-            let mut is_green = false;
+            let mut is_selected = false;
             if let Some(select_coords) = select_coords {
                 if i == select_coords.0 as usize && j == select_coords.1 as usize {
-                    is_green = true;
+                    is_selected = true;
                 }
             }
-            display_cell(cell, is_green);
+            display_cell(cell);
         }
         println!("");
     }
@@ -66,26 +66,26 @@ fn display_board(board: &Vec<Vec<Cell>>, select_coords: Option<(i32, i32)>, sett
         println!("Left Mouse Button to Click, F to Flag and ESC to exit to main menu");
     }
 }
-fn display_cell(cell: &Cell, is_green: bool) {
+fn display_cell(cell: &Cell) {
     let display_string;
     if cell.flagged == false {
         if cell.hidden == true {
-            display_string = get_display_string('#', is_green);
+            display_string = get_display_string('#', cell.selected);
         } else {
             if cell.element == '0' {
-                display_string = get_display_string(' ', is_green);
+                display_string = get_display_string(' ', cell.selected);
             } else {
-                display_string = get_display_string(cell.element, is_green);
+                display_string = get_display_string(cell.element, cell.selected);
             }
         }
     } else {
-        display_string = get_display_string('⚑', is_green);
+        display_string = get_display_string('⚑', cell.selected);
     }
     print!("{display_string}");
 }
-fn get_display_string(character: char, is_green: bool) -> ANSIGenericString<'static, str> {
+fn get_display_string(character: char, is_selected: bool) -> ANSIGenericString<'static, str> {
     let board_objects_map: HashMap<char, ANSIGenericString<'static, str>>;
-    if !is_green {
+    if !is_selected {
         board_objects_map = HashMap::from([
             ('M', RGB(0, 0, 0).on(White).bold().paint(" ✹ ")),
             ('1', RGB(6, 3, 255).on(White).bold().paint(" 1 ")),
@@ -151,11 +151,7 @@ fn get_around_cell(
     let iterator = [coords[0] as i32, coords[1] as i32];
     for i in iterator[0] - 1..=iterator[0] + 1 {
         for j in iterator[1] - 1..=iterator[1] + 1 {
-            if i >= 0
-                && j >= 0
-                && i < settings.height as i32
-                && j < settings.width as i32
-            {
+            if i >= 0 && j >= 0 && i < settings.height as i32 && j < settings.width as i32 {
                 cells.push((
                     board[i as usize][j as usize].element,
                     i as usize,
@@ -167,7 +163,7 @@ fn get_around_cell(
     cells
 }
 
-fn make_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
+fn place_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
     let mut board_copy = board.clone();
     for (row_number, row) in board.iter().enumerate() {
         for (column_number, cell) in row.iter().enumerate() {
@@ -209,8 +205,10 @@ fn deobfuscate_board(
                     if j.0 == '0' {
                         next_to_check.push(curr_cell);
                         board[j.1][j.2].hidden = false;
+                        update_cell(board, (j.1 as i32, j.2 as i32));
                     } else if j.0 != '0' && j.0 != 'M' {
                         board[j.1][j.2].hidden = false;
+                        update_cell(board, (j.1 as i32, j.2 as i32));
                     }
                 }
             }
@@ -244,8 +242,9 @@ fn event(
     }
 }
 
-fn flag(board: &mut Vec<Vec<Cell>>, row: usize, column: usize) {
-    board[row][column].flagged = !board[row][column].flagged;
+fn flag(board: &mut Vec<Vec<Cell>>, row: i32, column: i32) {
+    board[column as usize][row as usize].flagged = !board[column as usize][row as usize].flagged;
+    update_cell(&board, (row, column));
 }
 
 fn won(board: &Vec<Vec<Cell>>) -> bool {
@@ -260,21 +259,18 @@ fn won(board: &Vec<Vec<Cell>>) -> bool {
 }
 
 fn get_choice_from_user(
-    board: &Vec<Vec<Cell>>,
+    mut board: &mut Vec<Vec<Cell>>,
     settings: &Settings,
     starting_coords: (i32, i32),
 ) -> (Choice, i32, i32) {
     let mut select_coords = (starting_coords.0, starting_coords.1);
-    let mut previous_cell_data: (Cell, i32, i32) = (
-        board[select_coords.0 as usize][select_coords.1 as usize],
-        select_coords.0,
-        select_coords.1,
-    );
     let choice: Choice;
     display_board(board, Some(select_coords), &settings);
     stdout().execute(EnableMouseCapture).unwrap();
+
     loop {
         enable_raw_mode().unwrap();
+
         match read().unwrap() {
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::Down(MouseButton::Left),
@@ -287,31 +283,10 @@ fn get_choice_from_user(
             }
             Event::Mouse(MouseEvent { row, column, .. }) => {
                 if let InputType::Mouse = settings.input_type {
-                    stdout().execute(SavePosition).unwrap();
-                    stdout()
-                        .execute(MoveTo(
-                            (previous_cell_data.2 * 3) as u16,
-                            (previous_cell_data.1) as u16,
-                        ))
-                        .unwrap();
-                    display_cell(&previous_cell_data.0, false);
-                    stdout().execute(RestorePosition).unwrap();
+                    board[select_coords.0 as usize][select_coords.1 as usize].selected = false;
+                    update_cell(&board, select_coords);
                     select_coords.1 = max(0, min(column as i32 / 3, settings.width - 1));
                     select_coords.0 = max(0, min(row as i32, settings.height - 1));
-                    previous_cell_data = (
-                        board[select_coords.0 as usize][select_coords.1 as usize],
-                        select_coords.0,
-                        select_coords.1,
-                    );
-                    stdout().execute(SavePosition).unwrap();
-                    stdout()
-                        .execute(MoveTo(
-                            (previous_cell_data.2 * 3) as u16,
-                            (previous_cell_data.1) as u16,
-                        ))
-                        .unwrap();
-                    display_cell(&previous_cell_data.0, true);
-                    stdout().execute(RestorePosition).unwrap();
                 }
             }
             Event::Key(KeyEvent {
@@ -320,8 +295,9 @@ fn get_choice_from_user(
                 ..
             }) => {
                 if let InputType::Keyboard = settings.input_type {
+                    board[select_coords.0 as usize][select_coords.1 as usize].selected = false;
+                    update_cell(&board, select_coords);
                     select_coords.1 = max(0, min(select_coords.1 - 1, settings.width - 1));
-                    display_board(board, Some(select_coords), &settings);
                 }
             }
             Event::Key(KeyEvent {
@@ -330,8 +306,9 @@ fn get_choice_from_user(
                 ..
             }) => {
                 if let InputType::Keyboard = settings.input_type {
+                    board[select_coords.0 as usize][select_coords.1 as usize].selected = false;
+                    update_cell(&board, select_coords);
                     select_coords.1 = max(0, min(select_coords.1 + 1, settings.width - 1));
-                    display_board(board, Some(select_coords), &settings);
                 }
             }
             Event::Key(KeyEvent {
@@ -340,8 +317,9 @@ fn get_choice_from_user(
                 ..
             }) => {
                 if let InputType::Keyboard = settings.input_type {
+                    board[select_coords.0 as usize][select_coords.1 as usize].selected = false;
+                    update_cell(&board, select_coords);
                     select_coords.0 = max(0, min(select_coords.0 - 1, settings.height - 1));
-                    display_board(board, Some(select_coords), &settings);
                 }
             }
             Event::Key(KeyEvent {
@@ -350,8 +328,9 @@ fn get_choice_from_user(
                 ..
             }) => {
                 if let InputType::Keyboard = settings.input_type {
+                    board[select_coords.0 as usize][select_coords.1 as usize].selected = false;
+                    update_cell(&board, select_coords);
                     select_coords.0 = max(0, min(select_coords.0 + 1, settings.height - 1));
-                    display_board(board, Some(select_coords), &settings);
                 }
             }
             Event::Key(KeyEvent {
@@ -368,10 +347,7 @@ fn get_choice_from_user(
                 code: KeyCode::Char('f'),
                 kind: KeyEventKind::Press,
                 ..
-            }) => {
-                choice = Choice::Flag;
-                break;
-            }
+            }) => flag(&mut board, select_coords.1, select_coords.0),
             Event::Key(KeyEvent {
                 code: KeyCode::Esc,
                 kind: KeyEventKind::Press,
@@ -382,11 +358,21 @@ fn get_choice_from_user(
             }
             _ => {}
         }
+        board[select_coords.0 as usize][select_coords.1 as usize].selected = true;
+        update_cell(&board, select_coords);
     }
     disable_raw_mode().unwrap();
     stdout().execute(ResetColor).unwrap();
 
     (choice, select_coords.0 as i32, select_coords.1 as i32)
+}
+fn update_cell(board: &Vec<Vec<Cell>>, pos: (i32, i32)) {
+    stdout().execute(SavePosition).unwrap();
+    stdout()
+        .execute(MoveTo((pos.1 * 3) as u16, (pos.0) as u16))
+        .unwrap();
+    display_cell(&board[pos.0 as usize][pos.1 as usize]);
+    stdout().execute(RestorePosition).unwrap();
 }
 fn get_settings(mut settings: Settings) -> Settings {
     let settings_options = vec!["Play", "Difficulty", "Controls", "Exit"];
@@ -495,15 +481,88 @@ fn exit_gracefully() {
     stdout().execute(ResetColor).unwrap();
     process::exit(0);
 }
+fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
+    clear();
+    loop {
+        if !go_directly_to_game {
+            settings = get_settings(settings);
+        }
+
+        let mut board = vec![
+            vec![
+                Cell {
+                    hidden: true,
+                    element: '0',
+                    flagged: false,
+                    selected: false,
+                };
+                settings.width as usize
+            ];
+            settings.height as usize
+        ];
+        clear();
+        place_mines(&mut board, &settings);
+        place_numbers(&mut board, &settings);
+        let mut select_coords = (settings.width / 2 as i32, settings.height / 2 as i32);
+        loop {
+            let (choice, row_number, column_number) =
+                get_choice_from_user(&mut board, &settings, select_coords);
+            select_coords.0 = row_number;
+            select_coords.1 = column_number;
+            match choice {
+                Choice::Exit => {
+                    main_menu(settings.clone(), false);
+                }
+                Choice::Click => {
+                    let event = event(row_number, column_number, &mut board, &settings);
+                    if event == 'D' {
+                        clear();
+                        for i in board.iter_mut() {
+                            for j in i.iter_mut() {
+                                j.hidden = false;
+                                j.selected = false;
+                            }
+                        }
+                        display_board(&board, None, &settings);
+                        println!("You died.");
+                        break;
+                    }
+                    if won(&board) {
+                        for i in board.iter_mut() {
+                            for j in i.iter_mut() {
+                                j.hidden = false;
+                                j.selected = false;
+                            }
+                        }
+                        display_board(&board, None, &settings);
+                        println!("You win!");
+                        break;
+                    }
+                }
+            };
+        }
+        let options = vec!["Play Again", "Main Menu", "Exit"];
+        let choice = Select::with_theme(&ColorfulTheme::default())
+            .items(&options)
+            .interact()
+            .unwrap();
+        match choice {
+            0 => main_menu(settings.clone(), true),
+            1 => main_menu(settings.clone(), false),
+            2 => exit_gracefully(),
+            _ => {}
+        }
+    }
+}
 #[derive(Debug, Copy, Clone)]
 struct Cell {
     hidden: bool,
     element: char,
     flagged: bool,
+    selected: bool,
 }
 enum Choice {
     Click,
-    Flag,
     Exit,
 }
 enum Difficulty {
@@ -531,82 +590,6 @@ impl Default for Settings {
             width: 8,
             height: 8,
             input_type: InputType::Mouse,
-        }
-    }
-}
-fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
-    clear();
-    loop {
-        if !go_directly_to_game {
-            settings = get_settings(settings);
-        }
-
-        let mut board = vec![
-            vec![
-                Cell {
-                    hidden: true,
-                    element: '0',
-                    flagged: false
-                };
-                settings.width as usize
-            ];
-            settings.height as usize
-        ];
-        clear();
-        mine_board(&mut board, &settings);
-        make_numbers(&mut board, &settings);
-        let mut select_coords = (settings.width / 2 as i32, settings.height / 2 as i32);
-        loop {
-            let (choice, row_number, column_number) =
-                get_choice_from_user(&board, &settings, select_coords);
-            select_coords.0 = row_number;
-            select_coords.1 = column_number;
-            match choice {
-                Choice::Exit => {
-                    main_menu(settings.clone(), false);
-                }
-                Choice::Click => {
-                    let event = event(row_number, column_number, &mut board, &settings);
-                    if event == 'D' {
-                        clear();
-                        for i in board.iter_mut() {
-                            for j in i.iter_mut() {
-                                j.hidden = false;
-                            }
-                        }
-                        display_board(&board, None, &settings);
-                        println!("You died.");
-                        break;
-                    } else {
-                        clear();
-                    }
-                    if won(&board) {
-                        for i in board.iter_mut() {
-                            for j in i.iter_mut() {
-                                j.hidden = false;
-                            }
-                        }
-                        display_board(&board, None, &settings);
-                        println!("You win!");
-                        break;
-                    }
-                }
-                Choice::Flag => {
-                    flag(&mut board, row_number as usize, column_number as usize);
-                    clear();
-                }
-            };
-        }
-        let options = vec!["Play Again", "Main Menu", "Exit"];
-        let choice = Select::with_theme(&ColorfulTheme::default())
-            .items(&options)
-            .interact()
-            .unwrap();
-        match choice {
-            0 => main_menu(settings.clone(), true),
-            1 => main_menu(settings.clone(), false),
-            2 => exit_gracefully(),
-            _ => {}
         }
     }
 }
