@@ -183,8 +183,7 @@ fn get_around_cell(
     let iterator = [coords[0] as i32, coords[1] as i32];
     for i in iterator[0] - 1..=iterator[0] + 1 {
         for j in iterator[1] - 1..=iterator[1] + 1 {
-            if !(i == 0 && j == 0)
-                && i >= 0
+            if i >= 0
                 && j >= 0
                 && i < boardsize as i32
                 && j < boardsize as i32
