@@ -18,13 +18,10 @@ use std::{
     process,
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{Receiver, Sender},
         Arc,
     },
     thread,
-    time::Duration,
 };
-use terminal_size::Width;
 
 use ansi_term::{
     ANSIGenericString,
