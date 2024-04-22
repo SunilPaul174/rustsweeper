@@ -15,13 +15,13 @@ Once Rust is installed, follow these steps:
 1. Clone this repository to your local machine:
 
    ```
-   git clone https://github.com/yourusername/rust-minesweeper.git
+   git clone https://github.com/AidenPierce616/rustsweeper.git
    ```
 
 2. Navigate into the project directory:
 
    ```
-   cd rust-minesweeper
+   cd rustsweeper
    ```
 
 3. Build the project using Cargo:
