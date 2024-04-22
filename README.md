@@ -41,11 +41,14 @@ Once Rust is installed, follow these steps:
 - **Mouse Controls (with GUI)**:
   - Click on a cell to reveal it.
   - Press `F` to flag a cell as a potential mine.
+  - Press `Esc` at any time to return to the main menu.
+
 
 - **Keyboard Controls (without GUI)**:
   - Use `W`, `A`, `S`, `D` keys to move the selected cell.
   - Press `C` to reveal the selected cell.
   - Press `F` to flag the selected cell as a potential mine.
+  - Press `Esc` at any time to return to the main menu.
 
 You can customize controls and adjust game difficulty using the in-game menu:
 - Go to the main menu.
