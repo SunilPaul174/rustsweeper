@@ -6,7 +6,7 @@
 
 This repository contains a basic command-line Minesweeper program written in Rust.
 
-## Installation
+## Building
 
 To play the Minesweeper game, you need to have Rust installed on your system. If Rust is not installed, you can download and install it from [here](https://www.rust-lang.org/tools/install).
 
@@ -38,13 +38,13 @@ Once Rust is installed, follow these steps:
 
 ## Usage
 
-- **Mouse Controls (with GUI)**:
+- **Mouse Controls (if you have a desktop environment)**:
   - Click on a cell to reveal it.
   - Press `F` to flag a cell as a potential mine.
   - Press `Esc` at any time to return to the main menu.
 
 
-- **Keyboard Controls (without GUI)**:
+- **Keyboard Controls (if you don't have a desktop environment or don't have a mouse)**:
   - Use `W`, `A`, `S`, `D` keys to move the selected cell.
   - Press `C` to reveal the selected cell.
   - Press `F` to flag the selected cell as a potential mine.
@@ -54,7 +54,8 @@ You can customize controls and adjust game difficulty using the in-game menu:
 - Go to the main menu.
 - Select the "Controls" option to change input preferences between mouse and keyboard.
 - Select the "Difficulty" option to choose from predefined difficulty levels: Easy, Normal, and Hard.
-- Alternatively, choose "Custom" to specify custom settings, including board width (max 40), board height (max 28), and the number of mines.
+- Alternatively, choose "Custom" to specify custom settings, including board width, board height, and the number of mines.
+- The size of your terminal determines the max height and length.
 
 ## Contributing
 
