@@ -1,5 +1,5 @@
 use crossterm::{
-    cursor::{MoveTo, RestorePosition, SavePosition},
+    cursor::{Hide, MoveTo, RestorePosition, SavePosition, Show},
     event::{
         read, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent,
         MouseEventKind,
@@ -16,7 +16,15 @@ use std::{
     collections::HashMap,
     io::stdout,
     process,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{Receiver, Sender},
+        Arc,
+    },
+    thread,
+    time::Duration,
 };
+use terminal_size::Width;
 
 use ansi_term::{
     ANSIGenericString,
@@ -251,18 +259,45 @@ fn won(board: &Vec<Vec<Cell>>) -> bool {
     }
     true
 }
-
+fn get_terminal_size() -> (i32, i32) {
+    let size = terminal_size::terminal_size().unwrap();
+    (size.0 .0 as i32, size.1 .0 as i32)
+}
 fn get_choice_from_user(
     mut board: &mut Vec<Vec<Cell>>,
     settings: &Settings,
     starting_coords: (i32, i32),
 ) -> (Choice, i32, i32) {
     let mut select_coords = (starting_coords.0, starting_coords.1);
+    //let mut previous_select_coords = select_coords;
     let choice: Choice;
+    let thread_flag = Arc::new(AtomicBool::new(false));
+    let flag_clone = thread_flag.clone();
+    let mut terminal_size = get_terminal_size();
+    let settings_copy = settings.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let handle = thread::spawn(move || {
+        let mut board_copy: Option<Vec<Vec<Cell>>> = None;
+        while !flag_clone.load(Ordering::Relaxed) {
+            match rx.try_recv() {
+                Ok(received_data) => board_copy = Some(received_data),
+                Err(_) => {}
+            }
+            let new_terminal_size = get_terminal_size();
+            if terminal_size != new_terminal_size {
+                clear();
+                terminal_size = new_terminal_size;
+                if let Some(ref board_copy) = board_copy {
+                    display_board(&board_copy, &settings_copy);
+                }
+            }
+        }
+    });
+
     stdout().execute(EnableMouseCapture).unwrap();
     loop {
         enable_raw_mode().unwrap();
-
+        stdout().execute(Hide).unwrap();
         match read().unwrap() {
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::Down(MouseButton::Left),
@@ -352,10 +387,13 @@ fn get_choice_from_user(
         }
         board[select_coords.0 as usize][select_coords.1 as usize].selected = true;
         update_cell(&board, select_coords);
+        //previous_select_coords = select_coords;
+        tx.send(board.clone()).unwrap();
     }
     disable_raw_mode().unwrap();
     stdout().execute(ResetColor).unwrap();
-
+    thread_flag.store(true, Ordering::Relaxed);
+    handle.join().unwrap();
     (choice, select_coords.0 as i32, select_coords.1 as i32)
 }
 fn update_cell(board: &Vec<Vec<Cell>>, pos: (i32, i32)) {
@@ -471,6 +509,7 @@ fn select_difficulty(settings: &mut Settings) {
 fn exit_gracefully() {
     disable_raw_mode().unwrap();
     stdout().execute(ResetColor).unwrap();
+    stdout().execute(Show).unwrap();
     process::exit(0);
 }
 fn reveal_board(board: &mut Vec<Vec<Cell>>) {
