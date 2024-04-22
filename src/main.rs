@@ -241,6 +241,7 @@ fn event(
         'D'
     } else if temp_cell != '0' {
         board[row_number as usize][column_number as usize].hidden = false;
+        update_cell(board, (row_number, column_number));
         'F'
     } else {
         board[row_number as usize][column_number as usize].hidden = false;
@@ -279,7 +280,7 @@ fn get_choice_from_user(
     starting_coords: (i32, i32),
 ) -> (Choice, i32, i32) {
     let mut select_coords = (starting_coords.0, starting_coords.1);
-    //let mut previous_select_coords = select_coords;
+    let mut previous_select_coords = select_coords;
     let choice: Choice;
     let thread_flag = Arc::new(AtomicBool::new(false));
     let flag_clone = thread_flag.clone();
@@ -320,8 +321,6 @@ fn get_choice_from_user(
             }
             Event::Mouse(MouseEvent { row, column, .. }) => {
                 if let InputType::Mouse = settings.input_type {
-                    board[select_coords.0 as usize][select_coords.1 as usize].selected = false;
-                    update_cell(&board, select_coords);
                     select_coords.1 = max(0, min(column as i32 / 3, settings.width - 1));
                     select_coords.0 = max(0, min(row as i32, settings.height - 1));
                 }
@@ -332,8 +331,6 @@ fn get_choice_from_user(
                 ..
             }) => {
                 if let InputType::Keyboard = settings.input_type {
-                    board[select_coords.0 as usize][select_coords.1 as usize].selected = false;
-                    update_cell(&board, select_coords);
                     select_coords.1 = max(0, min(select_coords.1 - 1, settings.width - 1));
                 }
             }
@@ -343,8 +340,6 @@ fn get_choice_from_user(
                 ..
             }) => {
                 if let InputType::Keyboard = settings.input_type {
-                    board[select_coords.0 as usize][select_coords.1 as usize].selected = false;
-                    update_cell(&board, select_coords);
                     select_coords.1 = max(0, min(select_coords.1 + 1, settings.width - 1));
                 }
             }
@@ -354,8 +349,6 @@ fn get_choice_from_user(
                 ..
             }) => {
                 if let InputType::Keyboard = settings.input_type {
-                    board[select_coords.0 as usize][select_coords.1 as usize].selected = false;
-                    update_cell(&board, select_coords);
                     select_coords.0 = max(0, min(select_coords.0 - 1, settings.height - 1));
                 }
             }
@@ -365,8 +358,6 @@ fn get_choice_from_user(
                 ..
             }) => {
                 if let InputType::Keyboard = settings.input_type {
-                    board[select_coords.0 as usize][select_coords.1 as usize].selected = false;
-                    update_cell(&board, select_coords);
                     select_coords.0 = max(0, min(select_coords.0 + 1, settings.height - 1));
                 }
             }
@@ -395,10 +386,15 @@ fn get_choice_from_user(
             }
             _ => {}
         }
-        board[select_coords.0 as usize][select_coords.1 as usize].selected = true;
-        update_cell(&board, select_coords);
-        //previous_select_coords = select_coords;
-        tx.send(board.clone()).unwrap();
+        if select_coords != previous_select_coords {
+            board[previous_select_coords.0 as usize][previous_select_coords.1 as usize].selected =
+                false;
+            update_cell(&board, previous_select_coords);
+            board[select_coords.0 as usize][select_coords.1 as usize].selected = true;
+            update_cell(&board, select_coords);
+            previous_select_coords = select_coords;
+            tx.send(board.clone()).unwrap();
+        }
     }
     disable_raw_mode().unwrap();
     stdout().execute(ResetColor).unwrap();
