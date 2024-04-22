@@ -45,17 +45,11 @@ fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
         board[row_index][column_index].element = 'M';
     }
 }
-fn display_board(board: &Vec<Vec<Cell>>, select_coords: Option<(i32, i32)>, settings: &Settings) {
+fn display_board(board: &Vec<Vec<Cell>>, settings: &Settings) {
     disable_raw_mode().unwrap();
     clear();
-    for (i, row) in board.iter().enumerate() {
-        for (j, cell) in row.iter().enumerate() {
-            let mut is_selected = false;
-            if let Some(select_coords) = select_coords {
-                if i == select_coords.0 as usize && j == select_coords.1 as usize {
-                    is_selected = true;
-                }
-            }
+    for (_, row) in board.iter().enumerate() {
+        for (_, cell) in row.iter().enumerate() {
             display_cell(cell);
         }
         println!("");
@@ -265,9 +259,7 @@ fn get_choice_from_user(
 ) -> (Choice, i32, i32) {
     let mut select_coords = (starting_coords.0, starting_coords.1);
     let choice: Choice;
-    display_board(board, Some(select_coords), &settings);
     stdout().execute(EnableMouseCapture).unwrap();
-
     loop {
         enable_raw_mode().unwrap();
 
@@ -481,6 +473,21 @@ fn exit_gracefully() {
     stdout().execute(ResetColor).unwrap();
     process::exit(0);
 }
+fn reveal_board(board: &mut Vec<Vec<Cell>>) {
+    let mut updated_cells: Vec<(i32, i32)> = vec![];
+    for (x, i) in board.iter_mut().enumerate() {
+        for (y, j) in i.iter_mut().enumerate() {
+            if j.hidden || j.selected {
+                updated_cells.push((x as i32, y as i32));
+            }
+            j.hidden = false;
+            j.selected = false;
+        }
+    }
+    for cell in updated_cells {
+        update_cell(&board, (cell.0 as i32, cell.1 as i32));
+    }
+}
 fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
     clear();
     loop {
@@ -503,6 +510,7 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
         clear();
         place_mines(&mut board, &settings);
         place_numbers(&mut board, &settings);
+        display_board(&board, &settings);
         let mut select_coords = (settings.height / 2 as i32, settings.width / 2 as i32);
         loop {
             let (choice, row_number, column_number) =
@@ -516,25 +524,12 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
                 Choice::Click => {
                     let event = event(row_number, column_number, &mut board, &settings);
                     if event == 'D' {
-                        clear();
-                        for i in board.iter_mut() {
-                            for j in i.iter_mut() {
-                                j.hidden = false;
-                                j.selected = false;
-                            }
-                        }
-                        display_board(&board, None, &settings);
+                        reveal_board(&mut board);
                         println!("You died.");
                         break;
                     }
                     if won(&board) {
-                        for i in board.iter_mut() {
-                            for j in i.iter_mut() {
-                                j.hidden = false;
-                                j.selected = false;
-                            }
-                        }
-                        display_board(&board, None, &settings);
+                        reveal_board(&mut board);
                         println!("You win!");
                         break;
                     }
