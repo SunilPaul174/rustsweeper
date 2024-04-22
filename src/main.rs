@@ -1,10 +1,15 @@
 use crossterm::{
-    event::{read, Event, KeyCode, KeyEvent, KeyEventKind},
+    cursor::{MoveTo, RestorePosition, SavePosition},
+    event::{
+        read, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent,
+        MouseEventKind,
+    },
     execute,
     style::ResetColor,
     terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
     ExecutableCommand,
 };
+use dialoguer::{theme::ColorfulTheme, Input, Select};
 use rand::seq::SliceRandom;
 use std::{
     cmp::{max, min},
@@ -21,163 +26,126 @@ use ansi_term::{
 fn clear() {
     execute!(stdout(), Clear(ClearType::All)).unwrap();
     print!("\x1B[2J\x1B[1;1H");
+    execute!(stdout(), Clear(ClearType::All)).unwrap();
+    print!("\x1B[2J\x1B[1;1H");
 }
 
-fn mine_board(board: &mut Vec<Vec<Cell>>, boardsize: usize) {
-    let mut clear_indexes: Vec<(usize, usize)> = vec![];
-    for (row_number, row) in board.iter_mut().enumerate() {
-        let mut indexes: Vec<usize> = vec![];
-        for i in 0..boardsize {
-            indexes.push(i);
-        }
-        let indexes = indexes.clone();
-
-        let mine_number = (boardsize / 8) + 1;
-
-        let choices: Vec<&usize> = indexes
-            .choose_multiple(&mut rand::thread_rng(), mine_number)
-            .collect();
-
-        for i in choices.iter() {
-            row[**i].element = 'M';
-        }
-        for i in indexes.iter() {
-            match choices.iter().position(|&r| r == i) {
-                Some(_) => {}
-                None => {
-                    clear_indexes.push((row_number, *i));
-                }
-            }
-        }
+fn mine_board(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
+    let cell_amount = settings.width * settings.height;
+    let mut indeces: Vec<usize> = vec![];
+    for i in 0..cell_amount as usize {
+        indeces.push(i);
+    }
+    let choices: Vec<&usize> = indeces
+        .choose_multiple(&mut rand::thread_rng(), settings.mines as usize)
+        .collect();
+    for index in choices {
+        let row_index = index / settings.width as usize;
+        let column_index = index % settings.width as usize;
+        board[row_index][column_index].element = 'M';
     }
 }
-
-fn display_board(
-    board: &Vec<Vec<Cell>>,
-    board_objects_map: &HashMap<char, ANSIGenericString<'static, str>>,
-    boardsize: usize,
-    select_coords: Option<(i32, i32)>,
-) {
+fn display_board(board: &Vec<Vec<Cell>>, select_coords: Option<(i32, i32)>, settings: &Settings) {
     disable_raw_mode().unwrap();
     clear();
-    print!("    ");
-    for i in 1..boardsize + 1 {
-        let temp: String;
-        if i < 10 {
-            temp = format!("0{} ", i);
-        } else {
-            temp = format!("{} ", i);
-        }
-        print!("{}", temp);
-    }
-    println!();
     for (i, row) in board.iter().enumerate() {
-        if i > 8 {
-            print!("{:3} ", i + 1);
-        } else {
-            let temp_str = String::from("0")
-                + &String::from(char::from_digit((i + 1).try_into().unwrap(), 10).expect("Fuck"));
-            print!(" {} ", temp_str);
-        }
         for (j, cell) in row.iter().enumerate() {
-            let mut display_string;
-            if cell.flagged == false {
-                if cell.hidden == true {
-                    display_string = board_objects_map.get(&'#').expect("Fuck").clone();
-                } else {
-                    if cell.element == '0' {
-                        display_string = board_objects_map.get(&' ').expect("Fuck").clone();
-                    } else {
-                        display_string =
-                            board_objects_map.get(&cell.element).expect("Fuck").clone();
-                    }
-                }
-            } else {
-                display_string = board_objects_map.get(&'⚑').expect("Fuck").clone();
-            }
+            let mut is_green = false;
             if let Some(select_coords) = select_coords {
-                if j == select_coords.0 as usize && i == select_coords.1 as usize {
-                    display_string = ansi_term::Colour::White
-                        .on(ansi_term::Colour::RGB(144, 238, 144))
-                        .paint("   ");
+                if i == select_coords.0 as usize && j == select_coords.1 as usize {
+                    is_green = true;
                 }
             }
-            print!("{display_string}");
-        }
-        if i > 8 {
-            print!("{:3} ", i + 1);
-        } else {
-            let temp_str = String::from("0")
-                + &String::from(char::from_digit((i + 1).try_into().unwrap(), 10).expect("Fuck"));
-            print!(" {} ", temp_str);
+            display_cell(cell, is_green);
         }
         println!("");
     }
-    print!("    ");
-    for i in 1..boardsize + 1 {
-        let temp: String;
-        if i < 10 {
-            temp = format!("0{} ", i);
+    if let InputType::Keyboard = settings.input_type {
+        println!("WASD to move around, C to Click, F to Flag and ESC to exit to main menu");
+    } else {
+        println!("Left Mouse Button to Click, F to Flag and ESC to exit to main menu");
+    }
+}
+fn display_cell(cell: &Cell, is_green: bool) {
+    let display_string;
+    if cell.flagged == false {
+        if cell.hidden == true {
+            display_string = get_display_string('#', is_green);
         } else {
-            temp = format!("{} ", i);
+            if cell.element == '0' {
+                display_string = get_display_string(' ', is_green);
+            } else {
+                display_string = get_display_string(cell.element, is_green);
+            }
         }
-        print!("{}", temp);
+    } else {
+        display_string = get_display_string('⚑', is_green);
     }
-    println!("");
-    println!("WASD to move around, Enter to Select, and ESC to exit");
+    print!("{display_string}");
 }
-
-fn get_int_in_range_from_user(l: i32, u: i32, msg: String) -> i32 {
-    println!("{}", msg);
-    let mut input_text = String::new();
-    std::io::stdin()
-        .read_line(&mut input_text)
-        .expect("failed to read from stdin");
-
-    let trimmed = input_text.trim();
-    let number = match trimmed.parse::<i32>() {
-        Ok(i) => i,
-        Err(..) => -1,
-    };
-
-    if number == -1 || number < l || number > u {
-        return get_int_in_range_from_user(l, u, msg);
+fn get_display_string(character: char, is_green: bool) -> ANSIGenericString<'static, str> {
+    let board_objects_map: HashMap<char, ANSIGenericString<'static, str>>;
+    if !is_green {
+        board_objects_map = HashMap::from([
+            ('M', RGB(0, 0, 0).on(White).bold().paint(" ✹ ")),
+            ('1', RGB(6, 3, 255).on(White).bold().paint(" 1 ")),
+            ('2', RGB(3, 122, 6).on(White).bold().paint(" 2 ")),
+            ('3', RGB(254, 0, 0).on(White).bold().paint(" 3 ")),
+            ('4', RGB(0, 0, 132).on(White).bold().paint(" 4 ")),
+            ('5', RGB(130, 1, 2).on(White).bold().paint(" 5 ")),
+            ('6', RGB(2, 127, 130).on(White).bold().paint(" 6 ")),
+            ('7', RGB(0, 0, 0).on(White).bold().paint(" 7 ")),
+            ('8', RGB(125, 125, 125).on(White).bold().paint(" 8 ")),
+            ('#', Black.on(Black).bold().paint("   ")),
+            ('⚑', White.on(Black).bold().paint(" ⚑ ")),
+            (' ', White.on(White).bold().paint("   ")),
+        ]);
+    } else {
+        board_objects_map = HashMap::from([
+            ('M', RGB(0, 0, 0).on(RGB(144, 238, 144)).bold().paint(" ✹ ")),
+            (
+                '1',
+                RGB(6, 3, 255).on(RGB(144, 238, 144)).bold().paint(" 1 "),
+            ),
+            (
+                '2',
+                RGB(3, 122, 6).on(RGB(144, 238, 144)).bold().paint(" 2 "),
+            ),
+            (
+                '3',
+                RGB(254, 0, 0).on(RGB(144, 238, 144)).bold().paint(" 3 "),
+            ),
+            (
+                '4',
+                RGB(0, 0, 132).on(RGB(144, 238, 144)).bold().paint(" 4 "),
+            ),
+            (
+                '5',
+                RGB(130, 1, 2).on(RGB(144, 238, 144)).bold().paint(" 5 "),
+            ),
+            (
+                '6',
+                RGB(2, 127, 130).on(RGB(144, 238, 144)).bold().paint(" 6 "),
+            ),
+            ('7', RGB(0, 0, 0).on(RGB(144, 238, 144)).bold().paint(" 7 ")),
+            (
+                '8',
+                RGB(125, 125, 125)
+                    .on(RGB(144, 238, 144))
+                    .bold()
+                    .paint(" 8 "),
+            ),
+            ('#', Black.on(RGB(144, 238, 144)).bold().paint("   ")),
+            ('⚑', White.on(RGB(144, 238, 144)).bold().paint(" ⚑ ")),
+            (' ', White.on(RGB(144, 238, 144)).bold().paint("   ")),
+        ]);
     }
-    number
+    board_objects_map.get(&character).unwrap().clone()
 }
-
-// fn get_coord_from_user(boardsize: usize) -> (i32, i32) {
-//     println!("Enter coordinates");
-//     let row = get_int_in_range_from_user(
-//         1,
-//         (boardsize + 1).try_into().unwrap(),
-//         String::from("Enter row coordinate: "),
-//     );
-//     let col = get_int_in_range_from_user(
-//         1,
-//         (boardsize + 1).try_into().unwrap(),
-//         String::from("Enter column coordinate: "),
-//     );
-//     (row - 1, col - 1)
-// }
-
-fn get_option_from_user(option1: char, option2: char) -> char {
-    let mut input = String::new();
-    std::io::stdin()
-        .read_line(&mut input)
-        .ok()
-        .expect("Failed to read line");
-    let byte: char = input.bytes().nth(0).expect("no byte read") as char;
-    if byte != option1 && byte != option2 {
-        return get_option_from_user(option1, option2);
-    }
-    byte
-}
-
 fn get_around_cell(
     coords: [usize; 2],
     board: &Vec<Vec<Cell>>,
-    boardsize: usize,
+    settings: &Settings,
 ) -> Vec<(char, usize, usize)> {
     let mut cells: Vec<(char, usize, usize)> = vec![];
     let iterator = [coords[0] as i32, coords[1] as i32];
@@ -185,8 +153,8 @@ fn get_around_cell(
         for j in iterator[1] - 1..=iterator[1] + 1 {
             if i >= 0
                 && j >= 0
-                && i < boardsize as i32
-                && j < boardsize as i32
+                && i < settings.height as i32
+                && j < settings.width as i32
             {
                 cells.push((
                     board[i as usize][j as usize].element,
@@ -199,11 +167,11 @@ fn get_around_cell(
     cells
 }
 
-fn make_numbers(board: &mut Vec<Vec<Cell>>, boardsize: usize) {
+fn make_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
     let mut board_copy = board.clone();
     for (row_number, row) in board.iter().enumerate() {
         for (column_number, cell) in row.iter().enumerate() {
-            let around = get_around_cell([row_number, column_number], &board, boardsize);
+            let around = get_around_cell([row_number, column_number], &board, &settings);
             let mut number = 0;
             for i in around.iter() {
                 if i.0 == 'M' {
@@ -223,7 +191,7 @@ fn deobfuscate_board(
     board: &mut Vec<Vec<Cell>>,
     row_number: usize,
     column_number: usize,
-    boardsize: usize,
+    settings: &Settings,
 ) {
     let mut to_check = vec![];
     if board[row_number][column_number].element == '0' {
@@ -233,7 +201,7 @@ fn deobfuscate_board(
     let mut prev_checked: Vec<(usize, usize)> = Vec::new();
     while !to_check.is_empty() {
         for i in to_check.iter() {
-            let around = get_around_cell([i.0, i.1], board, boardsize);
+            let around = get_around_cell([i.0, i.1], board, &settings);
             for j in around.iter() {
                 let curr_cell = (j.1, j.2);
                 if !prev_checked.contains(&curr_cell) {
@@ -256,7 +224,7 @@ fn event(
     row_number: i32,
     column_number: i32,
     board: &mut Vec<Vec<Cell>>,
-    boardsize: usize,
+    settings: &Settings,
 ) -> char {
     let temp_cell = board[row_number as usize][column_number as usize].element;
     if temp_cell == 'M' {
@@ -270,7 +238,7 @@ fn event(
             board,
             row_number as usize,
             column_number as usize,
-            boardsize,
+            &settings,
         );
         'F'
     }
@@ -291,182 +259,357 @@ fn won(board: &Vec<Vec<Cell>>) -> bool {
     true
 }
 
-fn improved_get_coord_from_user(
+fn get_choice_from_user(
     board: &Vec<Vec<Cell>>,
-    board_objects_map: &HashMap<char, ANSIGenericString<'static, str>>,
-    boardsize: i32,
-) -> (i32, i32) {
-    let mut select_coords = ((boardsize / 2) as i32, (boardsize / 2) as i32);
-    display_board(
-        board,
-        board_objects_map,
-        boardsize as usize,
-        Some(select_coords),
+    settings: &Settings,
+    starting_coords: (i32, i32),
+) -> (Choice, i32, i32) {
+    let mut select_coords = (starting_coords.0, starting_coords.1);
+    let mut previous_cell_data: (Cell, i32, i32) = (
+        board[select_coords.0 as usize][select_coords.1 as usize],
+        select_coords.0,
+        select_coords.1,
     );
+    let choice: Choice;
+    display_board(board, Some(select_coords), &settings);
+    stdout().execute(EnableMouseCapture).unwrap();
     loop {
         enable_raw_mode().unwrap();
         match read().unwrap() {
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                ..
+            }) => {
+                if let InputType::Mouse = settings.input_type {
+                    choice = Choice::Click;
+                    break;
+                }
+            }
+            Event::Mouse(MouseEvent { row, column, .. }) => {
+                if let InputType::Mouse = settings.input_type {
+                    stdout().execute(SavePosition).unwrap();
+                    stdout()
+                        .execute(MoveTo(
+                            (previous_cell_data.2 * 3) as u16,
+                            (previous_cell_data.1) as u16,
+                        ))
+                        .unwrap();
+                    display_cell(&previous_cell_data.0, false);
+                    stdout().execute(RestorePosition).unwrap();
+                    select_coords.1 = max(0, min(column as i32 / 3, settings.width - 1));
+                    select_coords.0 = max(0, min(row as i32, settings.height - 1));
+                    previous_cell_data = (
+                        board[select_coords.0 as usize][select_coords.1 as usize],
+                        select_coords.0,
+                        select_coords.1,
+                    );
+                    stdout().execute(SavePosition).unwrap();
+                    stdout()
+                        .execute(MoveTo(
+                            (previous_cell_data.2 * 3) as u16,
+                            (previous_cell_data.1) as u16,
+                        ))
+                        .unwrap();
+                    display_cell(&previous_cell_data.0, true);
+                    stdout().execute(RestorePosition).unwrap();
+                }
+            }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('a'),
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                select_coords.0 = max(0, min(select_coords.0 - 1, boardsize - 1));
-                display_board(
-                    board,
-                    board_objects_map,
-                    boardsize as usize,
-                    Some(select_coords),
-                );
+                if let InputType::Keyboard = settings.input_type {
+                    select_coords.1 = max(0, min(select_coords.1 - 1, settings.width - 1));
+                    display_board(board, Some(select_coords), &settings);
+                }
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('d'),
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                select_coords.0 = max(0, min(select_coords.0 + 1, boardsize - 1));
-                display_board(
-                    board,
-                    board_objects_map,
-                    boardsize as usize,
-                    Some(select_coords),
-                );
+                if let InputType::Keyboard = settings.input_type {
+                    select_coords.1 = max(0, min(select_coords.1 + 1, settings.width - 1));
+                    display_board(board, Some(select_coords), &settings);
+                }
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('w'),
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                select_coords.1 = max(0, min(select_coords.1 - 1, boardsize - 1));
-                display_board(
-                    board,
-                    board_objects_map,
-                    boardsize as usize,
-                    Some(select_coords),
-                );
+                if let InputType::Keyboard = settings.input_type {
+                    select_coords.0 = max(0, min(select_coords.0 - 1, settings.height - 1));
+                    display_board(board, Some(select_coords), &settings);
+                }
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char('s'),
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                select_coords.1 = max(0, min(select_coords.1 + 1, boardsize - 1));
-                display_board(
-                    board,
-                    board_objects_map,
-                    boardsize as usize,
-                    Some(select_coords),
-                );
+                if let InputType::Keyboard = settings.input_type {
+                    select_coords.0 = max(0, min(select_coords.0 + 1, settings.height - 1));
+                    display_board(board, Some(select_coords), &settings);
+                }
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('c'),
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                if let InputType::Keyboard = settings.input_type {
+                    choice = Choice::Click;
+                    break;
+                }
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('f'),
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                choice = Choice::Flag;
+                break;
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Esc,
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                disable_raw_mode().unwrap();
-                process::exit(0);
+                choice = Choice::Exit;
+                break;
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Enter,
-                kind: KeyEventKind::Press,
-                ..
-            }) => break,
             _ => {}
         }
     }
     disable_raw_mode().unwrap();
     stdout().execute(ResetColor).unwrap();
 
-    (select_coords.1 as i32, select_coords.0 as i32)
+    (choice, select_coords.0 as i32, select_coords.1 as i32)
 }
-
-#[derive(Copy, Clone)]
+fn get_settings(mut settings: Settings) -> Settings {
+    let settings_options = vec!["Play", "Difficulty", "Controls", "Exit"];
+    loop {
+        let setting = Select::with_theme(&ColorfulTheme::default())
+            .items(&settings_options)
+            .interact()
+            .unwrap();
+        match setting {
+            0 => break,
+            1 => select_difficulty(&mut settings),
+            2 => select_input_type(&mut settings),
+            3 => exit_gracefully(),
+            _ => {}
+        }
+    }
+    settings
+}
+fn select_input_type(settings: &mut Settings) {
+    let input_options = vec!["Mouse", "Keyboard"]; //Todo Add Custom diffiuclty
+    let input_type = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select Input Type")
+        .items(&input_options)
+        .interact()
+        .unwrap();
+    let input_type = match input_type {
+        0 => InputType::Mouse,
+        1 => InputType::Keyboard,
+        _ => InputType::Mouse,
+    };
+    settings.input_type = input_type;
+}
+fn select_difficulty(settings: &mut Settings) {
+    let difficulty_options = vec!["Easy", "Normal", "Hard", "Custom"]; //Todo Add Custom diffiuclty
+    let difficulty = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select Difficulty")
+        .items(&difficulty_options)
+        .interact()
+        .unwrap();
+    let difficulty = match difficulty {
+        0 => Difficulty::Easy,
+        1 => Difficulty::Normal,
+        2 => Difficulty::Hard,
+        3 => Difficulty::Custom,
+        _ => Difficulty::Easy,
+    };
+    match difficulty {
+        Difficulty::Easy => {
+            settings.mines = 10;
+            settings.width = 8;
+            settings.height = 8;
+        }
+        Difficulty::Normal => {
+            settings.mines = 40;
+            settings.width = 16;
+            settings.height = 16;
+        }
+        Difficulty::Hard => {
+            settings.mines = 99;
+            settings.width = 30;
+            settings.height = 16;
+        }
+        Difficulty::Custom => {
+            let size = terminal_size::terminal_size().unwrap();
+            let width: u32 = Input::with_theme(&ColorfulTheme::default())
+                .with_prompt(&format!("Board width (max: {})", size.0 .0 / 3))
+                .validate_with(|x: &u32| {
+                    if *x > size.0 .0 as u32 / 3 {
+                        Err("Width entered exceeds the width of your terminal")
+                    } else {
+                        Ok(())
+                    }
+                })
+                .interact()
+                .unwrap();
+            settings.width = width as i32;
+            let height: u32 = Input::with_theme(&ColorfulTheme::default())
+                .with_prompt(&format!("Board height (max: {})", size.1 .0 -2))
+                .validate_with(|x: &u32| {
+                    if *x > size.1 .0 as u32 - 2 {
+                        Err("Height entered exceeds the height of your terminal and the instructions")
+                    } else {
+                        Ok(())
+                    }
+                })
+                .interact()
+                .unwrap();
+            settings.height = height as i32;
+            let mines: u32 = Input::with_theme(&ColorfulTheme::default())
+                .with_prompt("Mine amount")
+                .validate_with(|x: &u32| {
+                    if *x >= width * height {
+                        Err("Mine amount cannot exceed board area")
+                    } else {
+                        Ok(())
+                    }
+                })
+                .interact()
+                .unwrap();
+            settings.mines = mines as i32;
+        }
+    };
+}
+fn exit_gracefully() {
+    disable_raw_mode().unwrap();
+    stdout().execute(ResetColor).unwrap();
+    process::exit(0);
+}
+#[derive(Debug, Copy, Clone)]
 struct Cell {
     hidden: bool,
     element: char,
     flagged: bool,
 }
-
-fn main() {
-    let boardsize = get_int_in_range_from_user(0, 1000, String::from("Enter board size"));
-    let mut board = vec![
-        vec![
-            Cell {
-                hidden: true,
-                element: '0',
-                flagged: false
-            };
-            boardsize as usize
-        ];
-        boardsize as usize
-    ];
-    clear();
-    let board_objects_map: HashMap<char, ANSIGenericString<'static, str>> = HashMap::from([
-        ('M', RGB(0, 0, 0).on(White).bold().paint(" 🟐  ")),
-        ('1', RGB(6, 3, 255).on(White).bold().paint(" 1 ")),
-        ('2', RGB(3, 122, 6).on(White).bold().paint(" 2 ")),
-        ('3', RGB(254, 0, 0).on(White).bold().paint(" 3 ")),
-        ('4', RGB(0, 0, 132).on(White).bold().paint(" 4 ")),
-        ('5', RGB(130, 1, 2).on(White).bold().paint(" 5 ")),
-        ('6', RGB(2, 127, 130).on(White).bold().paint(" 6 ")),
-        ('7', RGB(0, 0, 0).on(White).bold().paint(" 7 ")),
-        ('8', RGB(125, 125, 125).on(White).bold().paint(" 8 ")),
-        ('#', Black.on(Black).bold().paint("   ")),
-        ('⚑', White.on(Black).bold().paint(" ⚑ ")),
-        (' ', White.on(White).bold().paint("   ")),
-    ]);
-
-    mine_board(&mut board, boardsize.try_into().unwrap());
-    make_numbers(&mut board, boardsize.try_into().unwrap());
-
-    loop {
-        let (row_number, column_number) =
-            improved_get_coord_from_user(&board, &board_objects_map, boardsize);
-        println!("Pick what to do: flag or press (f/p)");
-        let choice = get_option_from_user('f', 'p');
-        if choice == 'p' {
-            let event = event(
-                row_number,
-                column_number,
-                &mut board,
-                boardsize.try_into().unwrap(),
-            );
-            if event == 'D' {
-                clear();
-                for i in board.iter_mut() {
-                    for j in i.iter_mut() {
-                        j.hidden = false;
-                    }
-                }
-                display_board(
-                    &board,
-                    &board_objects_map,
-                    boardsize.try_into().unwrap(),
-                    None,
-                );
-                println!("You died.");
-                return;
-            } else {
-                clear();
-            }
-            if won(&board) {
-                for i in board.iter_mut() {
-                    for j in i.iter_mut() {
-                        j.hidden = false;
-                    }
-                }
-                display_board(
-                    &board,
-                    &board_objects_map,
-                    boardsize.try_into().unwrap(),
-                    None,
-                );
-                println!("You win!");
-                return;
-            }
-        } else {
-            flag(&mut board, row_number as usize, column_number as usize);
-            clear();
+enum Choice {
+    Click,
+    Flag,
+    Exit,
+}
+enum Difficulty {
+    Easy,
+    Normal,
+    Hard,
+    Custom,
+}
+#[derive(Debug, Clone, Copy)]
+enum InputType {
+    Mouse,
+    Keyboard,
+}
+#[derive(Debug, Clone, Copy)]
+struct Settings {
+    mines: i32,
+    width: i32,
+    height: i32,
+    input_type: InputType,
+}
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            mines: 10,
+            width: 8,
+            height: 8,
+            input_type: InputType::Mouse,
         }
     }
+}
+fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
+    clear();
+    loop {
+        if !go_directly_to_game {
+            settings = get_settings(settings);
+        }
+
+        let mut board = vec![
+            vec![
+                Cell {
+                    hidden: true,
+                    element: '0',
+                    flagged: false
+                };
+                settings.width as usize
+            ];
+            settings.height as usize
+        ];
+        clear();
+        mine_board(&mut board, &settings);
+        make_numbers(&mut board, &settings);
+        let mut select_coords = (settings.width / 2 as i32, settings.height / 2 as i32);
+        loop {
+            let (choice, row_number, column_number) =
+                get_choice_from_user(&board, &settings, select_coords);
+            select_coords.0 = row_number;
+            select_coords.1 = column_number;
+            match choice {
+                Choice::Exit => {
+                    main_menu(settings.clone(), false);
+                }
+                Choice::Click => {
+                    let event = event(row_number, column_number, &mut board, &settings);
+                    if event == 'D' {
+                        clear();
+                        for i in board.iter_mut() {
+                            for j in i.iter_mut() {
+                                j.hidden = false;
+                            }
+                        }
+                        display_board(&board, None, &settings);
+                        println!("You died.");
+                        break;
+                    } else {
+                        clear();
+                    }
+                    if won(&board) {
+                        for i in board.iter_mut() {
+                            for j in i.iter_mut() {
+                                j.hidden = false;
+                            }
+                        }
+                        display_board(&board, None, &settings);
+                        println!("You win!");
+                        break;
+                    }
+                }
+                Choice::Flag => {
+                    flag(&mut board, row_number as usize, column_number as usize);
+                    clear();
+                }
+            };
+        }
+        let options = vec!["Play Again", "Main Menu", "Exit"];
+        let choice = Select::with_theme(&ColorfulTheme::default())
+            .items(&options)
+            .interact()
+            .unwrap();
+        match choice {
+            0 => main_menu(settings.clone(), true),
+            1 => main_menu(settings.clone(), false),
+            2 => exit_gracefully(),
+            _ => {}
+        }
+    }
+}
+fn main() {
+    main_menu(Settings::default(), false);
 }
