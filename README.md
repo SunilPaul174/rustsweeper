@@ -6,6 +6,12 @@
 
 This repository contains a basic command-line Minesweeper program written in Rust.
 
+## Installation
+
+You can play the game by either downloading the executable or building it yourself. 
+You can find the latest releases (with executables) [here](https://github.com/AidenPierce616/rustsweeper/releases)
+
+To build it, please take a look at the section below.
 ## Building
 
 To play the Minesweeper game, you need to have Rust installed on your system. If Rust is not installed, you can download and install it from [here](https://www.rust-lang.org/tools/install).
