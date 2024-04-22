@@ -1,6 +1,6 @@
 # Rustsweeper
 
-![Minesweeper Demo](rustsweeper_play.gif)
+![Minesweeper Demo](gifs/rustsweeper_play.gif)
 
 ## Overview
 
