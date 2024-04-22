@@ -56,16 +56,26 @@ fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
 fn display_board(board: &Vec<Vec<Cell>>, settings: &Settings) {
     disable_raw_mode().unwrap();
     clear();
-    for (_, row) in board.iter().enumerate() {
+    let terminal_size = get_terminal_size();
+    for (i, row) in board.iter().enumerate() {
         for (_, cell) in row.iter().enumerate() {
             display_cell(cell);
         }
-        println!("");
+        if (i as i32 + 1) < terminal_size.1 {
+            println!("");
+        } else {
+            print!("");
+            stdout().execute(MoveTo(0, 0)).unwrap();
+            break;
+        }
     }
-    if let InputType::Keyboard = settings.input_type {
-        println!("WASD to move around, C to Click, F to Flag and ESC to exit to main menu");
-    } else {
-        println!("Left Mouse Button to Click, F to Flag and ESC to exit to main menu");
+    if settings.height < terminal_size.1 {
+        if let InputType::Keyboard = settings.input_type {
+            print!("WASD to move around, C to Click, F to Flag and ESC to exit to main menu");
+        } else {
+            print!("Left Mouse Button to Click, F to Flag and ESC to exit to main menu");
+        }
+        stdout().execute(MoveTo(0, 0)).unwrap();
     }
 }
 fn display_cell(cell: &Cell) {
@@ -561,14 +571,29 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
                     main_menu(settings.clone(), false);
                 }
                 Choice::Click => {
+                    let terminal_size = get_terminal_size();
                     let event = event(row_number, column_number, &mut board, &settings);
                     if event == 'D' {
-                        reveal_board(&mut board);
+                        if terminal_size.1 > settings.height + 4 {
+                            stdout()
+                                .execute(MoveTo(0, (settings.height + 1) as u16))
+                                .unwrap();
+                            reveal_board(&mut board);
+                        } else {
+                            clear();
+                        }
                         println!("You died.");
                         break;
                     }
                     if won(&board) {
-                        reveal_board(&mut board);
+                        if terminal_size.1 > settings.height + 4 {
+                            stdout()
+                                .execute(MoveTo(0, (settings.height + 1) as u16))
+                                .unwrap();
+                            reveal_board(&mut board);
+                        } else {
+                            clear();
+                        }
                         println!("You win!");
                         break;
                     }
