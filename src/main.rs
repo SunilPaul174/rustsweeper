@@ -596,7 +596,7 @@ fn game_play_loop_node(board: &mut Vec<Vec<Cell>>, settings: Settings, select_co
                 println!("You died.");
                 return ControlFlow::Break(());
             }
-            if won(&*board) {
+            if won(board) {
                 if terminal_size.1 > settings.height + 4 {
                     stdout()
                         .execute(MoveTo(0, (settings.height + 1) as u16))
