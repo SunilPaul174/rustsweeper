@@ -1,7 +1,8 @@
 use crossterm::{
     cursor::{Hide, MoveTo, RestorePosition, SavePosition, Show},
     event::{
-        read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind
+        read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
+        MouseButton, MouseEvent, MouseEventKind,
     },
     execute,
     style::ResetColor,
@@ -11,10 +12,16 @@ use crossterm::{
 use dialoguer::{theme::ColorfulTheme, Input, Select};
 use rand::seq::SliceRandom;
 use std::{
-    cmp::{max, min}, collections::HashMap, io::stdout, ops::ControlFlow, process, sync::{
+    cmp::{max, min},
+    collections::HashMap,
+    io::stdout,
+    ops::ControlFlow,
+    process,
+    sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
-    }, thread
+    },
+    thread,
 };
 
 use ansi_term::{
@@ -29,7 +36,7 @@ fn clear() {
     print!("\x1B[2J\x1B[1;1H");
 }
 
-fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords: (i32,i32)) {
+fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords: (i32, i32)) {
     let cell_amount = settings.width * settings.height;
     let mut indeces: Vec<usize> = vec![];
     for i in 0..cell_amount as usize {
@@ -38,12 +45,15 @@ fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords:
     let choices: Vec<&usize> = indeces
         .choose_multiple(&mut rand::thread_rng(), settings.mines as usize)
         .collect();
-    let mut invalid_spots = get_around_cell_coord_only([starting_coords.0 as usize, starting_coords.1 as usize], settings);
+    let mut invalid_spots = get_around_cell_coord_only(
+        [starting_coords.0 as usize, starting_coords.1 as usize],
+        settings,
+    );
     invalid_spots.push((starting_coords.0 as usize, starting_coords.0 as usize));
     for index in choices {
         let row_index = index / settings.width as usize;
         let column_index = index % settings.width as usize;
-        if !(invalid_spots.contains(&(row_index,column_index))) {
+        if !(invalid_spots.contains(&(row_index, column_index))) {
             board[row_index][column_index].element = 'M';
         }
     }
@@ -170,19 +180,13 @@ fn get_around_cell(
     cells
 }
 
-fn get_around_cell_coord_only(
-    coords: [usize; 2],
-    settings: &Settings,
-) -> Vec<(usize, usize)> {
+fn get_around_cell_coord_only(coords: [usize; 2], settings: &Settings) -> Vec<(usize, usize)> {
     let mut cells: Vec<(usize, usize)> = vec![];
     let iterator = [coords[0] as i32, coords[1] as i32];
     for i in iterator[0] - 1..=iterator[0] + 1 {
         for j in iterator[1] - 1..=iterator[1] + 1 {
             if i >= 0 && j >= 0 && i < settings.height as i32 && j < settings.width as i32 {
-                cells.push((
-                    i as usize,
-                    j as usize,
-                ));
+                cells.push((i as usize, j as usize));
             }
         }
     }
@@ -214,7 +218,7 @@ fn deobfuscate_board(
     row_number: usize,
     column_number: usize,
     settings: &Settings,
-    hidden_cells: &mut Vec<(usize,usize)>
+    hidden_cells: &mut Vec<(usize, usize)>,
 ) {
     let mut to_check = vec![];
     if board[row_number][column_number].element == '0' {
@@ -233,11 +237,11 @@ fn deobfuscate_board(
                         next_to_check.push(curr_cell);
                         board[j.1][j.2].hidden = false;
                         update_cell(board, (j.1 as i32, j.2 as i32));
-                        hidden_cells.retain(|value| *value != (j.1,j.2));
+                        hidden_cells.retain(|value| *value != (j.1, j.2));
                     } else if j.0 != '0' && j.0 != 'M' {
                         board[j.1][j.2].hidden = false;
                         update_cell(board, (j.1 as i32, j.2 as i32));
-                        hidden_cells.retain(|value| *value != (j.1,j.2));
+                        hidden_cells.retain(|value| *value != (j.1, j.2));
                     }
                 }
             }
@@ -252,7 +256,7 @@ fn event(
     column_number: i32,
     board: &mut Vec<Vec<Cell>>,
     settings: &Settings,
-    hidden_cells: &mut Vec<(usize,usize)>
+    hidden_cells: &mut Vec<(usize, usize)>,
 ) -> Click {
     let temp_cell = board[row_number as usize][column_number as usize].element;
     if temp_cell == 'M' {
@@ -270,7 +274,7 @@ fn event(
             row_number as usize,
             column_number as usize,
             &settings,
-            hidden_cells
+            hidden_cells,
         );
         Click::Fine
     }
@@ -278,10 +282,10 @@ fn event(
 
 fn flag(board: &mut Vec<Vec<Cell>>, row: i32, column: i32) {
     board[column as usize][row as usize].flagged = !board[column as usize][row as usize].flagged;
-    update_cell(&board, (row, column));
+    update_cell(&board, (column, row));
 }
 
-fn won(hidden_cells: &mut Vec<(usize,usize)>) -> bool {
+fn won(hidden_cells: &mut Vec<(usize, usize)>) -> bool {
     hidden_cells.is_empty()
 }
 fn get_terminal_size() -> (i32, i32) {
@@ -548,12 +552,12 @@ fn reveal_board(board: &mut Vec<Vec<Cell>>) {
         update_cell(&board, (cell.0 as i32, cell.1 as i32));
     }
 }
-fn initialize_free_cells(board: &Vec<Vec<Cell>>) -> Vec<(usize,usize)> {
-    let mut hidden_cells: Vec<(usize,usize)> = vec![];
+fn initialize_free_cells(board: &Vec<Vec<Cell>>) -> Vec<(usize, usize)> {
+    let mut hidden_cells: Vec<(usize, usize)> = vec![];
     for (row_number, row) in board.iter().enumerate() {
         for (cell_number, cell) in row.iter().enumerate() {
             if cell.element != 'M' {
-                hidden_cells.push((row_number,cell_number));
+                hidden_cells.push((row_number, cell_number));
             }
         }
     }
@@ -582,16 +586,24 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
         display_board(&board, &settings);
         let mut select_coords = (settings.height / 2 as i32, settings.width / 2 as i32);
         let (mut choice, mut row_number, mut column_number) =
-        get_choice_from_user(&mut board, &settings, select_coords);
+            get_choice_from_user(&mut board, &settings, select_coords);
         place_mines(&mut board, &settings, (row_number, column_number));
         place_numbers(&mut board, &settings);
         let mut hidden_cells = initialize_free_cells(&board);
         loop {
-            if let ControlFlow::Break(_) = game_play_loop_node(&mut board, settings, &mut select_coords, &choice, row_number, column_number, &mut hidden_cells) {
+            if let ControlFlow::Break(_) = game_play_loop_node(
+                &mut board,
+                settings,
+                &mut select_coords,
+                &choice,
+                row_number,
+                column_number,
+                &mut hidden_cells,
+            ) {
                 break;
             }
             (choice, row_number, column_number) =
-            get_choice_from_user(&mut board, &settings, select_coords);
+                get_choice_from_user(&mut board, &settings, select_coords);
         }
         let options = vec!["Play Again", "Main Menu", "Exit"];
         let choice = Select::with_theme(&ColorfulTheme::default())
@@ -607,7 +619,15 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
     }
 }
 
-fn game_play_loop_node(board: &mut Vec<Vec<Cell>>, settings: Settings, select_coords: &mut (i32, i32), choice: &Choice, row_number: i32, column_number: i32, hidden_cells: &mut Vec<(usize,usize)>) -> ControlFlow<()> {
+fn game_play_loop_node(
+    board: &mut Vec<Vec<Cell>>,
+    settings: Settings,
+    select_coords: &mut (i32, i32),
+    choice: &Choice,
+    row_number: i32,
+    column_number: i32,
+    hidden_cells: &mut Vec<(usize, usize)>,
+) -> ControlFlow<()> {
     select_coords.0 = row_number;
     select_coords.1 = column_number;
     match choice {
