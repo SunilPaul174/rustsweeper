@@ -258,10 +258,14 @@ fn event(
     settings: &Settings,
     hidden_cells: &mut Vec<(usize, usize)>,
 ) -> Click {
-    let temp_cell = board[row_number as usize][column_number as usize].element;
-    if temp_cell == 'M' {
+    let cell = board[row_number as usize][column_number as usize];
+    if cell.flagged {
+        return Click::Fine;
+    }
+    let cell_type = cell.element;
+    if cell_type == 'M' {
         Click::Dead
-    } else if temp_cell != '0' {
+    } else if cell_type != '0' {
         board[row_number as usize][column_number as usize].hidden = false;
         update_cell(board, (row_number, column_number));
         hidden_cells.retain(|value| *value != (row_number as usize, column_number as usize));
