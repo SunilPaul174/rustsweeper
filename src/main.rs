@@ -1,8 +1,7 @@
 use crossterm::{
     cursor::{Hide, MoveTo, RestorePosition, SavePosition, Show},
     event::{
-        read, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent,
-        MouseEventKind,
+        read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind
     },
     execute,
     style::ResetColor,
@@ -529,6 +528,7 @@ fn select_difficulty(settings: &mut Settings) {
 }
 fn exit_gracefully() {
     disable_raw_mode().unwrap();
+    stdout().execute(DisableMouseCapture).unwrap();
     stdout().execute(ResetColor).unwrap();
     stdout().execute(Show).unwrap();
     process::exit(0);
