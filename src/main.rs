@@ -194,6 +194,7 @@ fn deobfuscate_board(
     row_number: usize,
     column_number: usize,
     settings: &Settings,
+    hidden_cells: &mut Vec<(usize,usize)>
 ) {
     let mut to_check = vec![];
     if board[row_number][column_number].element == '0' {
@@ -212,9 +213,11 @@ fn deobfuscate_board(
                         next_to_check.push(curr_cell);
                         board[j.1][j.2].hidden = false;
                         update_cell(board, (j.1 as i32, j.2 as i32));
+                        hidden_cells.retain(|value| *value != (j.1,j.2));
                     } else if j.0 != '0' && j.0 != 'M' {
                         board[j.1][j.2].hidden = false;
                         update_cell(board, (j.1 as i32, j.2 as i32));
+                        hidden_cells.retain(|value| *value != (j.1,j.2));
                     }
                 }
             }
@@ -229,6 +232,7 @@ fn event(
     column_number: i32,
     board: &mut Vec<Vec<Cell>>,
     settings: &Settings,
+    hidden_cells: &mut Vec<(usize,usize)>
 ) -> Click {
     let temp_cell = board[row_number as usize][column_number as usize].element;
     if temp_cell == 'M' {
@@ -236,14 +240,17 @@ fn event(
     } else if temp_cell != '0' {
         board[row_number as usize][column_number as usize].hidden = false;
         update_cell(board, (row_number, column_number));
+        hidden_cells.retain(|value| *value != (row_number as usize, column_number as usize));
         Click::Fine
     } else {
         board[row_number as usize][column_number as usize].hidden = false;
+        hidden_cells.retain(|value| *value != (row_number as usize, column_number as usize));
         deobfuscate_board(
             board,
             row_number as usize,
             column_number as usize,
             &settings,
+            hidden_cells
         );
         Click::Fine
     }
@@ -254,15 +261,8 @@ fn flag(board: &mut Vec<Vec<Cell>>, row: i32, column: i32) {
     update_cell(&board, (row, column));
 }
 
-fn won(board: &Vec<Vec<Cell>>) -> bool {
-    for i in board.iter() {
-        for &j in i.iter() {
-            if j.hidden == true && j.element != 'M' {
-                return false;
-            }
-        }
-    }
-    true
+fn won(hidden_cells: &mut Vec<(usize,usize)>) -> bool {
+    hidden_cells.is_empty()
 }
 fn get_terminal_size() -> (i32, i32) {
     let size = terminal_size::terminal_size().unwrap();
@@ -527,6 +527,17 @@ fn reveal_board(board: &mut Vec<Vec<Cell>>) {
         update_cell(&board, (cell.0 as i32, cell.1 as i32));
     }
 }
+fn initialize_free_cells(board: &Vec<Vec<Cell>>) -> Vec<(usize,usize)> {
+    let mut hidden_cells: Vec<(usize,usize)> = vec![];
+    for (row_number, row) in board.iter().enumerate() {
+        for (cell_number, cell) in row.iter().enumerate() {
+            if cell.element != 'M' {
+                hidden_cells.push((row_number,cell_number));
+            }
+        }
+    }
+    hidden_cells
+}
 fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
     clear();
     loop {
@@ -553,8 +564,9 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
         get_choice_from_user(&mut board, &settings, select_coords);
         place_mines(&mut board, &settings, select_coords);
         place_numbers(&mut board, &settings);
+        let mut hidden_cells = initialize_free_cells(&board);
         loop {
-            if let ControlFlow::Break(_) = game_play_loop_node(&mut board, settings, &mut select_coords, &choice, row_number, column_number) {
+            if let ControlFlow::Break(_) = game_play_loop_node(&mut board, settings, &mut select_coords, &choice, row_number, column_number, &mut hidden_cells) {
                 break;
             }
             (choice, row_number, column_number) =
@@ -574,7 +586,7 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
     }
 }
 
-fn game_play_loop_node(board: &mut Vec<Vec<Cell>>, settings: Settings, select_coords: &mut (i32, i32), choice: &Choice, row_number: i32, column_number: i32) -> ControlFlow<()> {
+fn game_play_loop_node(board: &mut Vec<Vec<Cell>>, settings: Settings, select_coords: &mut (i32, i32), choice: &Choice, row_number: i32, column_number: i32, hidden_cells: &mut Vec<(usize,usize)>) -> ControlFlow<()> {
     select_coords.0 = row_number;
     select_coords.1 = column_number;
     match choice {
@@ -583,7 +595,7 @@ fn game_play_loop_node(board: &mut Vec<Vec<Cell>>, settings: Settings, select_co
         }
         Choice::Click => {
             let terminal_size = get_terminal_size();
-            let event = event(row_number, column_number, board, &settings);
+            let event = event(row_number, column_number, board, &settings, hidden_cells);
             match event {
                 Click::Dead => {
                     if terminal_size.1 > settings.height + 4 {
@@ -599,7 +611,7 @@ fn game_play_loop_node(board: &mut Vec<Vec<Cell>>, settings: Settings, select_co
                 }
                 Click::Fine => {}
             }
-            if won(board) {
+            if won(hidden_cells) {
                 if terminal_size.1 > settings.height + 4 {
                     stdout()
                         .execute(MoveTo(0, (settings.height + 1) as u16))
