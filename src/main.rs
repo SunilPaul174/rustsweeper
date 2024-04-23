@@ -39,10 +39,13 @@ fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords:
     let choices: Vec<&usize> = indeces
         .choose_multiple(&mut rand::thread_rng(), settings.mines as usize)
         .collect();
+    let mut invalid_spots = get_around_cell_coord_only([starting_coords.0 as usize, starting_coords.1 as usize], settings);
+    invalid_spots.push((starting_coords.0 as usize, starting_coords.0 as usize));
+    let invalid_spots = invalid_spots.clone();
     for index in choices {
         let row_index = index / settings.width as usize;
         let column_index = index % settings.width as usize;
-        if !((row_index as i32,column_index as i32) == starting_coords) {
+        if !(invalid_spots.contains(&(row_index,column_index))) {
             board[row_index][column_index].element = 'M';
         }
     }
@@ -160,6 +163,25 @@ fn get_around_cell(
             if i >= 0 && j >= 0 && i < settings.height as i32 && j < settings.width as i32 {
                 cells.push((
                     board[i as usize][j as usize].element,
+                    i as usize,
+                    j as usize,
+                ));
+            }
+        }
+    }
+    cells
+}
+
+fn get_around_cell_coord_only(
+    coords: [usize; 2],
+    settings: &Settings,
+) -> Vec<(usize, usize)> {
+    let mut cells: Vec<(usize, usize)> = vec![];
+    let iterator = [coords[0] as i32, coords[1] as i32];
+    for i in iterator[0] - 1..=iterator[0] + 1 {
+        for j in iterator[1] - 1..=iterator[1] + 1 {
+            if i >= 0 && j >= 0 && i < settings.height as i32 && j < settings.width as i32 {
+                cells.push((
                     i as usize,
                     j as usize,
                 ));
