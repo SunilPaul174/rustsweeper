@@ -30,7 +30,7 @@ fn clear() {
     print!("\x1B[2J\x1B[1;1H");
 }
 
-fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
+fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords: (i32,i32)) {
     let cell_amount = settings.width * settings.height;
     let mut indeces: Vec<usize> = vec![];
     for i in 0..cell_amount as usize {
@@ -42,7 +42,9 @@ fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
     for index in choices {
         let row_index = index / settings.width as usize;
         let column_index = index % settings.width as usize;
-        board[row_index][column_index].element = 'M';
+        if !((row_index as i32,column_index as i32) == starting_coords) {
+            board[row_index][column_index].element = 'M';
+        }
     }
 }
 fn display_board(board: &Vec<Vec<Cell>>, settings: &Settings) {
@@ -545,14 +547,18 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
             settings.height as usize
         ];
         clear();
-        place_mines(&mut board, &settings);
-        place_numbers(&mut board, &settings);
         display_board(&board, &settings);
         let mut select_coords = (settings.height / 2 as i32, settings.width / 2 as i32);
+        let (mut choice, mut row_number, mut column_number) =
+        get_choice_from_user(&mut board, &settings, select_coords);
+        place_mines(&mut board, &settings, select_coords);
+        place_numbers(&mut board, &settings);
         loop {
-            if let ControlFlow::Break(_) = game_play_loop_node(&mut board, settings, &mut select_coords) {
+            if let ControlFlow::Break(_) = game_play_loop_node(&mut board, settings, &mut select_coords, &choice, row_number, column_number) {
                 break;
             }
+            (choice, row_number, column_number) =
+            get_choice_from_user(&mut board, &settings, select_coords);
         }
         let options = vec!["Play Again", "Main Menu", "Exit"];
         let choice = Select::with_theme(&ColorfulTheme::default())
@@ -568,9 +574,7 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
     }
 }
 
-fn game_play_loop_node(board: &mut Vec<Vec<Cell>>, settings: Settings, select_coords: &mut (i32, i32)) -> ControlFlow<()> {
-    let (choice, row_number, column_number) =
-        get_choice_from_user(board, &settings, *select_coords);
+fn game_play_loop_node(board: &mut Vec<Vec<Cell>>, settings: Settings, select_coords: &mut (i32, i32), choice: &Choice, row_number: i32, column_number: i32) -> ControlFlow<()> {
     select_coords.0 = row_number;
     select_coords.1 = column_number;
     match choice {
