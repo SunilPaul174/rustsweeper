@@ -583,8 +583,9 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
             settings.height as usize
         ];
         clear();
-        display_board(&board, &settings);
         let mut select_coords = (settings.height / 2 as i32, settings.width / 2 as i32);
+        board[select_coords.0 as usize][select_coords.1 as usize].selected = true;
+        display_board(&board, &settings);
         let (mut choice, mut row_number, mut column_number) =
             get_choice_from_user(&mut board, &settings, select_coords);
         place_mines(&mut board, &settings, (row_number, column_number));
