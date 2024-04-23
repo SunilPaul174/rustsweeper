@@ -12,15 +12,10 @@ use crossterm::{
 use dialoguer::{theme::ColorfulTheme, Input, Select};
 use rand::seq::SliceRandom;
 use std::{
-    cmp::{max, min},
-    collections::HashMap,
-    io::stdout,
-    process,
-    sync::{
+    cmp::{max, min}, collections::HashMap, io::stdout, ops::ControlFlow, process, sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
-    },
-    thread,
+    }, thread
 };
 
 use ansi_term::{
@@ -555,43 +550,9 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
         display_board(&board, &settings);
         let mut select_coords = (settings.height / 2 as i32, settings.width / 2 as i32);
         loop {
-            let (choice, row_number, column_number) =
-                get_choice_from_user(&mut board, &settings, select_coords);
-            select_coords.0 = row_number;
-            select_coords.1 = column_number;
-            match choice {
-                Choice::Exit => {
-                    main_menu(settings.clone(), false);
-                }
-                Choice::Click => {
-                    let terminal_size = get_terminal_size();
-                    let event = event(row_number, column_number, &mut board, &settings);
-                    if event == 'D' {
-                        if terminal_size.1 > settings.height + 4 {
-                            stdout()
-                                .execute(MoveTo(0, (settings.height + 1) as u16))
-                                .unwrap();
-                            reveal_board(&mut board);
-                        } else {
-                            clear();
-                        }
-                        println!("You died.");
-                        break;
-                    }
-                    if won(&board) {
-                        if terminal_size.1 > settings.height + 4 {
-                            stdout()
-                                .execute(MoveTo(0, (settings.height + 1) as u16))
-                                .unwrap();
-                            reveal_board(&mut board);
-                        } else {
-                            clear();
-                        }
-                        println!("You win!");
-                        break;
-                    }
-                }
-            };
+            if let ControlFlow::Break(_) = game_play_loop_node(&mut board, settings, &mut select_coords) {
+                break;
+            }
         }
         let options = vec!["Play Again", "Main Menu", "Exit"];
         let choice = Select::with_theme(&ColorfulTheme::default())
@@ -605,6 +566,47 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
             _ => {}
         }
     }
+}
+
+fn game_play_loop_node(board: &mut Vec<Vec<Cell>>, settings: Settings, select_coords: &mut (i32, i32)) -> ControlFlow<()> {
+    let (choice, row_number, column_number) =
+        get_choice_from_user(board, &settings, *select_coords);
+    select_coords.0 = row_number;
+    select_coords.1 = column_number;
+    match choice {
+        Choice::Exit => {
+            main_menu(settings.clone(), false);
+        }
+        Choice::Click => {
+            let terminal_size = get_terminal_size();
+            let event = event(row_number, column_number, board, &settings);
+            if event == 'D' {
+                if terminal_size.1 > settings.height + 4 {
+                    stdout()
+                        .execute(MoveTo(0, (settings.height + 1) as u16))
+                        .unwrap();
+                    reveal_board(board);
+                } else {
+                    clear();
+                }
+                println!("You died.");
+                return ControlFlow::Break(());
+            }
+            if won(&*board) {
+                if terminal_size.1 > settings.height + 4 {
+                    stdout()
+                        .execute(MoveTo(0, (settings.height + 1) as u16))
+                        .unwrap();
+                    reveal_board(board);
+                } else {
+                    clear();
+                }
+                println!("You win!");
+                return ControlFlow::Break(());
+            }
+        }
+    };
+    ControlFlow::Continue(())
 }
 #[derive(Debug, Copy, Clone)]
 struct Cell {
