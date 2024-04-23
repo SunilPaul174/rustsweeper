@@ -41,7 +41,6 @@ fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords:
         .collect();
     let mut invalid_spots = get_around_cell_coord_only([starting_coords.0 as usize, starting_coords.1 as usize], settings);
     invalid_spots.push((starting_coords.0 as usize, starting_coords.0 as usize));
-    let invalid_spots = invalid_spots.clone();
     for index in choices {
         let row_index = index / settings.width as usize;
         let column_index = index % settings.width as usize;
