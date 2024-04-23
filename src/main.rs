@@ -229,14 +229,14 @@ fn event(
     column_number: i32,
     board: &mut Vec<Vec<Cell>>,
     settings: &Settings,
-) -> char {
+) -> Click {
     let temp_cell = board[row_number as usize][column_number as usize].element;
     if temp_cell == 'M' {
-        'D'
+        Click::Dead
     } else if temp_cell != '0' {
         board[row_number as usize][column_number as usize].hidden = false;
         update_cell(board, (row_number, column_number));
-        'F'
+        Click::Fine
     } else {
         board[row_number as usize][column_number as usize].hidden = false;
         deobfuscate_board(
@@ -245,7 +245,7 @@ fn event(
             column_number as usize,
             &settings,
         );
-        'F'
+        Click::Fine
     }
 }
 
@@ -584,7 +584,7 @@ fn game_play_loop_node(board: &mut Vec<Vec<Cell>>, settings: Settings, select_co
         Choice::Click => {
             let terminal_size = get_terminal_size();
             let event = event(row_number, column_number, board, &settings);
-            if event == 'D' {
+            if event == Click::Dead {
                 if terminal_size.1 > settings.height + 4 {
                     stdout()
                         .execute(MoveTo(0, (settings.height + 1) as u16))
@@ -633,6 +633,12 @@ enum Difficulty {
 enum InputType {
     Mouse,
     Keyboard,
+}
+
+#[derive(PartialEq)]
+enum Click {
+    Dead,
+    Fine,
 }
 #[derive(Debug, Clone, Copy)]
 struct Settings {
