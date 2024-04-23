@@ -584,17 +584,20 @@ fn game_play_loop_node(board: &mut Vec<Vec<Cell>>, settings: Settings, select_co
         Choice::Click => {
             let terminal_size = get_terminal_size();
             let event = event(row_number, column_number, board, &settings);
-            if event == Click::Dead {
-                if terminal_size.1 > settings.height + 4 {
-                    stdout()
-                        .execute(MoveTo(0, (settings.height + 1) as u16))
-                        .unwrap();
-                    reveal_board(board);
-                } else {
-                    clear();
+            match event {
+                Click::Dead => {
+                    if terminal_size.1 > settings.height + 4 {
+                        stdout()
+                            .execute(MoveTo(0, (settings.height + 1) as u16))
+                            .unwrap();
+                        reveal_board(board);
+                    } else {
+                        clear();
+                    }
+                    println!("You died.");
+                    return ControlFlow::Break(());
                 }
-                println!("You died.");
-                return ControlFlow::Break(());
+                Click::Fine => {}
             }
             if won(board) {
                 if terminal_size.1 > settings.height + 4 {
