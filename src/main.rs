@@ -180,19 +180,6 @@ fn get_around_cell(
     cells
 }
 
-fn get_around_cell_coord_only(coords: [usize; 2], settings: &Settings) -> Vec<(usize, usize)> {
-    let mut cells: Vec<(usize, usize)> = vec![];
-    let iterator = [coords[0] as i32, coords[1] as i32];
-    for i in iterator[0] - 1..=iterator[0] + 1 {
-        for j in iterator[1] - 1..=iterator[1] + 1 {
-            if i >= 0 && j >= 0 && i < settings.height as i32 && j < settings.width as i32 {
-                cells.push((i as usize, j as usize));
-            }
-        }
-    }
-    cells
-}
-
 fn place_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
     let mut board_copy = board.clone();
     for (row_number, row) in board.iter().enumerate() {
