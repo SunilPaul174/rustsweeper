@@ -677,7 +677,6 @@ enum InputType {
     Mouse,
     Keyboard,
 }
-
 #[derive(PartialEq)]
 enum Click {
     Dead,
