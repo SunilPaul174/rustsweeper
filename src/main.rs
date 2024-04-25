@@ -9,7 +9,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
     ExecutableCommand,
 };
-use dialoguer::{theme::ColorfulTheme, Input, Select};
+use dialoguer::{theme::ColorfulTheme, Input, MultiSelect, Select};
 use rand::seq::SliceRandom;
 use std::{
     cmp::{max, min},
@@ -419,7 +419,7 @@ fn update_cell(board: &Vec<Vec<Cell>>, pos: (i32, i32)) {
     stdout().execute(RestorePosition).unwrap();
 }
 fn get_settings(mut settings: Settings) -> Settings {
-    let settings_options = vec!["Play", "Difficulty", "Controls", "Exit"];
+    let settings_options = vec!["Play", "Difficulty", "Controls", "Appearance", "Exit"];
     loop {
         let setting = Select::with_theme(&ColorfulTheme::default())
             .items(&settings_options)
@@ -429,11 +429,29 @@ fn get_settings(mut settings: Settings) -> Settings {
             0 => break,
             1 => select_difficulty(&mut settings),
             2 => select_input_type(&mut settings),
-            3 => exit_gracefully(),
+            3 => get_appearance_settings(&mut settings),
+            4 => exit_gracefully(),
             _ => {}
         }
     }
     settings
+}
+fn get_appearance_settings(settings: &mut Settings) {
+    let appearance_options = vec!["Centered", "Bordered"];
+    let appearance = MultiSelect::new()
+        .items(&appearance_options)
+        .interact()
+        .unwrap();
+    settings.bordered = false;
+    settings.centered = false;
+    for i in appearance {
+        match i {
+            0 => settings.centered = true,
+            1 => settings.bordered = true,
+            _ => {}
+        }
+    }
+    println!("{:#?}", settings);
 }
 fn select_input_type(settings: &mut Settings) {
     let input_options = vec!["Mouse", "Keyboard"]; //Todo Add Custom diffiuclty
@@ -522,6 +540,7 @@ fn select_difficulty(settings: &mut Settings) {
 }
 fn exit_gracefully() {
     disable_raw_mode().unwrap();
+    stdout().execute(EnableMouseCapture).unwrap();
     stdout().execute(DisableMouseCapture).unwrap();
     stdout().execute(ResetColor).unwrap();
     stdout().execute(Show).unwrap();
@@ -689,6 +708,8 @@ struct Settings {
     width: i32,
     height: i32,
     input_type: InputType,
+    bordered: bool,
+    centered: bool,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -697,6 +718,8 @@ impl Default for Settings {
             width: 8,
             height: 8,
             input_type: InputType::Mouse,
+            bordered: true,
+            centered: true,
         }
     }
 }
