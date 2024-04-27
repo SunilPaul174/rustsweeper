@@ -36,14 +36,14 @@ fn clear(settings: &mut Settings) {
     settings.str_y_pos = 0;
     settings.showing_board = false;
 }
-fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords: (i32, i32)) {
+fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords: CellPos) {
     let cell_amount = settings.width * settings.height;
     let mut indeces: Vec<usize> = vec![];
     for i in 0..cell_amount as usize {
         let column_number = (i as i32) / settings.width;
         let row_number = (i as i32) % settings.width;
-        if (starting_coords.0 - column_number).abs() <= 1 {
-            if (starting_coords.1 - row_number).abs() <= 1 {
+        if (starting_coords.y - column_number).abs() <= 1 {
+            if (starting_coords.x - row_number).abs() <= 1 {
                 continue;
             }
         }
@@ -264,14 +264,13 @@ fn place_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
 }
 fn deobfuscate_board(
     board: &mut Vec<Vec<Cell>>,
-    row_number: usize,
-    column_number: usize,
+    cell_pos: CellPos,
     settings: &Settings,
     hidden_cells: &mut Vec<(usize, usize)>,
 ) {
     let mut to_check = vec![];
-    if board[row_number][column_number].element == '0' {
-        to_check.push((row_number, column_number));
+    if board[cell_pos.y as usize][cell_pos.x as usize].element == '0' {
+        to_check.push((cell_pos.y as usize, cell_pos.x as usize));
     }
     let mut next_to_check: Vec<(usize, usize)> = Vec::new();
     let mut prev_checked: Vec<(usize, usize)> = Vec::new();
@@ -314,13 +313,12 @@ fn deobfuscate_board(
     }
 }
 fn event(
-    row_number: i32,
-    column_number: i32,
+    cell_pos: CellPos,
     board: &mut Vec<Vec<Cell>>,
     settings: &Settings,
     hidden_cells: &mut Vec<(usize, usize)>,
 ) -> Click {
-    let cell = board[row_number as usize][column_number as usize];
+    let cell = board[cell_pos.y as usize][cell_pos.x as usize];
     if cell.flagged {
         return Click::Fine;
     }
@@ -328,27 +326,14 @@ fn event(
     if cell_type == 'M' {
         Click::Dead
     } else if cell_type != '0' {
-        board[row_number as usize][column_number as usize].hidden = false;
-        update_cell(
-            board,
-            CellPos {
-                x: column_number,
-                y: row_number,
-            },
-            settings,
-        );
-        hidden_cells.retain(|value| *value != (row_number as usize, column_number as usize));
+        board[cell_pos.y as usize][cell_pos.x as usize].hidden = false;
+        update_cell(board, cell_pos, settings);
+        hidden_cells.retain(|value| *value != (cell_pos.y as usize, cell_pos.x as usize));
         Click::Fine
     } else {
-        board[row_number as usize][column_number as usize].hidden = false;
-        hidden_cells.retain(|value| *value != (row_number as usize, column_number as usize));
-        deobfuscate_board(
-            board,
-            row_number as usize,
-            column_number as usize,
-            &settings,
-            hidden_cells,
-        );
+        board[cell_pos.y as usize][cell_pos.x as usize].hidden = false;
+        hidden_cells.retain(|value| *value != (cell_pos.y as usize, cell_pos.x as usize));
+        deobfuscate_board(board, cell_pos, &settings, hidden_cells);
         Click::Fine
     }
 }
@@ -368,7 +353,7 @@ fn get_choice_from_user(
     mut board: &mut Vec<Vec<Cell>>,
     settings: Arc<Mutex<Settings>>,
     starting_pos: CellPos,
-) -> (Choice, i32, i32) {
+) -> (Choice, CellPos) {
     let mut cell_pos = starting_pos;
     let mut previous_select_pos = cell_pos;
     let settings_mutex: Arc<Mutex<Settings>> = Arc::clone(&settings);
@@ -557,7 +542,7 @@ fn get_choice_from_user(
     thread_flag.store(true, Ordering::Relaxed);
     handle.join().unwrap();
 
-    (choice, cell_pos.y as i32, cell_pos.x as i32)
+    (choice, cell_pos)
 }
 fn get_settings(settings: &mut Settings) {
     let settings_options = vec!["Play", "Difficulty", "Controls", "Appearance", "Exit"];
@@ -759,17 +744,18 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
             settings.height as usize
         ];
         clear(&mut settings);
-        let select_pos = CellPos {
+        let mut cell_pos = CellPos {
             x: settings.width / 2,
             y: settings.height / 2,
         };
-        board[select_pos.y as usize][select_pos.x as usize].selected = true;
+        board[cell_pos.y as usize][cell_pos.x as usize].selected = true;
         display_board(&board, &mut settings);
         let settings_mutex = Arc::new(Mutex::new(settings));
-        let (mut choice, mut row_number, mut column_number) =
-            get_choice_from_user(&mut board, Arc::clone(&settings_mutex), select_pos);
+        let (mut choice, new_cell_pos) =
+            get_choice_from_user(&mut board, Arc::clone(&settings_mutex), cell_pos);
+        cell_pos = new_cell_pos;
         settings = *settings_mutex.lock().unwrap();
-        place_mines(&mut board, &settings, (row_number, column_number));
+        place_mines(&mut board, &settings, cell_pos);
         place_numbers(&mut board, &settings);
         let mut hidden_cells = initialize_free_cells(&board);
         loop {
@@ -777,14 +763,13 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
                 &mut board,
                 &mut settings,
                 &choice,
-                row_number,
-                column_number,
+                cell_pos,
                 &mut hidden_cells,
             ) {
                 break;
             }
-            (choice, row_number, column_number) =
-                get_choice_from_user(&mut board, Arc::clone(&settings_mutex), select_pos);
+            (choice, cell_pos) =
+                get_choice_from_user(&mut board, Arc::clone(&settings_mutex), cell_pos);
         }
         let terminal_size = get_terminal_size();
         let options = vec!["Play Again", "Main Menu", "Exit"];
@@ -817,8 +802,7 @@ fn game_play_loop_node(
     board: &mut Vec<Vec<Cell>>,
     settings: &mut Settings,
     choice: &Choice,
-    row_number: i32,
-    column_number: i32,
+    cell_pos: CellPos,
     hidden_cells: &mut Vec<(usize, usize)>,
 ) -> ControlFlow<()> {
     match choice {
@@ -827,7 +811,7 @@ fn game_play_loop_node(
         }
         Choice::Click => {
             let terminal_size = get_terminal_size();
-            let event = event(row_number, column_number, board, &settings, hidden_cells);
+            let event = event(cell_pos, board, &settings, hidden_cells);
             match event {
                 Click::Dead => {
                     if terminal_size.1 > settings.height + 4 {
