@@ -961,7 +961,7 @@ impl Default for Settings {
             height: 8,
             input_type: InputType::Mouse,
             bordered: false,
-            centered: false,
+            centered: true,
             board_x_pos: 0,
             board_y_pos: 0,
             str_y_pos: 0,
