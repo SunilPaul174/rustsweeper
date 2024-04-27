@@ -1,5 +1,5 @@
 use crossterm::{
-    cursor::{Hide, MoveTo, RestorePosition, SavePosition, Show},
+    cursor::{Hide, MoveTo, Show},
     event::{
         read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
         MouseButton, MouseEvent, MouseEventKind,
@@ -19,7 +19,7 @@ use std::{
     process,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     thread,
 };
@@ -28,14 +28,13 @@ use ansi_term::{
     ANSIGenericString,
     Colour::{Black, White, RGB},
 };
-
-fn clear() {
+fn clear(settings: &mut Settings) {
     execute!(stdout(), Clear(ClearType::All)).unwrap();
     print!("\x1B[2J\x1B[1;1H");
     execute!(stdout(), Clear(ClearType::All)).unwrap();
     print!("\x1B[2J\x1B[1;1H");
+    settings.str_y_pos = 0;
 }
-
 fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords: (i32, i32)) {
     let cell_amount = settings.width * settings.height;
     let mut indeces: Vec<usize> = vec![];
@@ -58,30 +57,97 @@ fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords:
         board[row_index][column_index].element = 'M';
     }
 }
-fn display_board(board: &Vec<Vec<Cell>>, settings: &Settings) {
+fn display_board(board: &Vec<Vec<Cell>>, settings: &mut Settings) {
     disable_raw_mode().unwrap();
-    clear();
+    clear(settings);
     let terminal_size = get_terminal_size();
-    for (i, row) in board.iter().enumerate() {
-        for (_, cell) in row.iter().enumerate() {
-            display_cell(cell);
-        }
-        if (i as i32 + 1) < terminal_size.1 {
-            println!("");
-        } else {
-            print!("");
-            stdout().execute(MoveTo(0, 0)).unwrap();
-            break;
+    for y in 0..settings.height {
+        for x in 0..settings.width {
+            update_cell(&board, CellPos { x, y }, &settings);
         }
     }
-    if settings.height < terminal_size.1 {
+    let mut tip_pos = (
+        settings.board_x_pos as i32,
+        settings.height + settings.board_y_pos as i32 - 1,
+    );
+    let mut y_limit = terminal_size.1;
+    if settings.bordered {
+        y_limit -= 1;
+        tip_pos.1 += 1;
+        tip_pos.0 -= 1;
+        for j in 0..2 {
+            for i in 0..settings.width {
+                let move_to_x = settings.board_x_pos as i32 + i * 3;
+                let mut move_to_y = settings.board_y_pos as i32 - 1;
+                match j {
+                    1 => move_to_y += settings.width + 1,
+                    _ => {}
+                }
+                if move_to_x >= 0
+                    && move_to_x < terminal_size.0
+                    && move_to_y >= 0
+                    && move_to_y < terminal_size.1
+                {
+                    stdout()
+                        .execute(MoveTo(move_to_x as u16, move_to_y as u16))
+                        .unwrap();
+                    print!("{}", White.on(Black).paint("###"));
+                }
+            }
+        }
+        for j in 0..2 {
+            for i in -1..settings.height + 1 {
+                let mut move_to_x = settings.board_x_pos as i32 - 1;
+                let move_to_y = settings.board_y_pos as i32 + i;
+                match j {
+                    1 => move_to_x += settings.width * 3 + 1,
+                    _ => {}
+                }
+                if move_to_x >= 0
+                    && move_to_x < terminal_size.0
+                    && move_to_y >= 0
+                    && move_to_y < terminal_size.1
+                {
+                    stdout()
+                        .execute(MoveTo(move_to_x as u16, move_to_y as u16))
+                        .unwrap();
+                    print!("{}", White.on(Black).paint("#"));
+                }
+            }
+        }
+    }
+    if tip_pos.1 < y_limit {
+        stdout()
+            .execute(MoveTo(tip_pos.0.max(0) as u16, (tip_pos.1 + 1) as u16))
+            .unwrap();
         if let InputType::Keyboard = settings.input_type {
-            print!("WASD to move around, C to Click, F to Flag and ESC to exit to main menu");
+            print_string(
+                "WASD to move around, C to Click, F to Flag and ESC to exit to main menu",
+                settings,
+            );
         } else {
-            print!("Left Mouse Button to Click, F to Flag and ESC to exit to main menu");
+            print_string(
+                "Left Mouse Button to Click, F to Flag and ESC to exit to main menu",
+                settings,
+            );
         }
         stdout().execute(MoveTo(0, 0)).unwrap();
     }
+}
+fn update_cell(board: &Vec<Vec<Cell>>, cell_pos: CellPos, settings: &Settings) {
+    let mut x_pos: u16 = (cell_pos.x * 3) as u16;
+    let mut y_pos: u16 = (cell_pos.y) as u16;
+    x_pos += settings.board_x_pos as u16;
+    y_pos += settings.board_y_pos as u16;
+    let terminal_size = get_terminal_size();
+    if x_pos as i32 >= terminal_size.0 {
+        return;
+    }
+    if y_pos as i32 >= terminal_size.0 {
+        return;
+    }
+    stdout().execute(MoveTo(x_pos, y_pos)).unwrap();
+    display_cell(&board[cell_pos.y as usize][cell_pos.x as usize]);
 }
 fn display_cell(cell: &Cell) {
     let display_string;
@@ -179,7 +245,6 @@ fn get_around_cell(
     }
     cells
 }
-
 fn place_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
     let mut board_copy = board.clone();
     for (row_number, row) in board.iter().enumerate() {
@@ -199,7 +264,6 @@ fn place_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
     }
     *board = board_copy.clone();
 }
-
 fn deobfuscate_board(
     board: &mut Vec<Vec<Cell>>,
     row_number: usize,
@@ -223,11 +287,25 @@ fn deobfuscate_board(
                     if j.0 == '0' {
                         next_to_check.push(curr_cell);
                         board[j.1][j.2].hidden = false;
-                        update_cell(board, (j.1 as i32, j.2 as i32));
+                        update_cell(
+                            board,
+                            CellPos {
+                                x: j.2 as i32,
+                                y: j.1 as i32,
+                            },
+                            settings,
+                        );
                         hidden_cells.retain(|value| *value != (j.1, j.2));
                     } else if j.0 != '0' && j.0 != 'M' {
                         board[j.1][j.2].hidden = false;
-                        update_cell(board, (j.1 as i32, j.2 as i32));
+                        update_cell(
+                            board,
+                            CellPos {
+                                x: j.2 as i32,
+                                y: j.1 as i32,
+                            },
+                            settings,
+                        );
                         hidden_cells.retain(|value| *value != (j.1, j.2));
                     }
                 }
@@ -237,7 +315,6 @@ fn deobfuscate_board(
         next_to_check = vec![];
     }
 }
-
 fn event(
     row_number: i32,
     column_number: i32,
@@ -254,7 +331,14 @@ fn event(
         Click::Dead
     } else if cell_type != '0' {
         board[row_number as usize][column_number as usize].hidden = false;
-        update_cell(board, (row_number, column_number));
+        update_cell(
+            board,
+            CellPos {
+                x: column_number,
+                y: row_number,
+            },
+            settings,
+        );
         hidden_cells.retain(|value| *value != (row_number as usize, column_number as usize));
         Click::Fine
     } else {
@@ -270,12 +354,11 @@ fn event(
         Click::Fine
     }
 }
-
-fn flag(board: &mut Vec<Vec<Cell>>, row: i32, column: i32) {
-    board[column as usize][row as usize].flagged = !board[column as usize][row as usize].flagged;
-    update_cell(&board, (column, row));
+fn flag(board: &mut Vec<Vec<Cell>>, cell_pos: CellPos, settings: &Settings) {
+    board[cell_pos.y as usize][cell_pos.x as usize].flagged =
+        !board[cell_pos.y as usize][cell_pos.x as usize].flagged;
+    update_cell(&board, cell_pos, settings);
 }
-
 fn won(hidden_cells: &mut Vec<(usize, usize)>) -> bool {
     hidden_cells.is_empty()
 }
@@ -285,30 +368,37 @@ fn get_terminal_size() -> (i32, i32) {
 }
 fn get_choice_from_user(
     mut board: &mut Vec<Vec<Cell>>,
-    settings: &Settings,
-    starting_coords: (i32, i32),
+    settings: Arc<Mutex<Settings>>,
+    starting_pos: CellPos,
 ) -> (Choice, i32, i32) {
-    let mut select_coords = (starting_coords.0, starting_coords.1);
-    let mut previous_select_coords = select_coords;
+    let mut cell_pos = starting_pos;
+    let mut previous_select_pos = cell_pos;
+    let settings_mutex: Arc<Mutex<Settings>> = Arc::clone(&settings);
+
+    let mut mouse_pos = cell_pos.convert(&mut settings_mutex.lock().unwrap());
     let choice: Choice;
     let thread_flag = Arc::new(AtomicBool::new(false));
     let flag_clone = thread_flag.clone();
     let mut terminal_size = get_terminal_size();
-    let settings_copy = settings.clone();
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<Vec<Cell>>>();
+
+    let cloned_mutex = Arc::clone(&settings_mutex);
     let handle = thread::spawn(move || {
         let mut board_copy: Option<Vec<Vec<Cell>>> = None;
         while !flag_clone.load(Ordering::Relaxed) {
             match rx.try_recv() {
-                Ok(received_data) => board_copy = Some(received_data),
+                Ok(received_data) => {
+                    board_copy = Some(received_data);
+                }
                 Err(_) => {}
             }
             let new_terminal_size = get_terminal_size();
             if terminal_size != new_terminal_size {
-                clear();
+                clear(&mut cloned_mutex.lock().unwrap());
                 terminal_size = new_terminal_size;
                 if let Some(ref board_copy) = board_copy {
-                    display_board(&board_copy, &settings_copy);
+                    display_board(&board_copy, &mut cloned_mutex.lock().unwrap());
+                    clear(&mut cloned_mutex.lock().unwrap());
                 }
             }
         }
@@ -322,15 +412,17 @@ fn get_choice_from_user(
                 kind: MouseEventKind::Down(MouseButton::Left),
                 ..
             }) => {
+                let settings = settings_mutex.lock().unwrap();
                 if let InputType::Mouse = settings.input_type {
                     choice = Choice::Click;
                     break;
                 }
             }
             Event::Mouse(MouseEvent { row, column, .. }) => {
-                if let InputType::Mouse = settings.input_type {
-                    select_coords.1 = max(0, min(column as i32 / 3, settings.width - 1));
-                    select_coords.0 = max(0, min(row as i32, settings.height - 1));
+                if let InputType::Mouse = settings_mutex.lock().unwrap().input_type {
+                    mouse_pos.x = column as i32;
+                    mouse_pos.y = row as i32;
+                    cell_pos = mouse_pos.convert(&mut settings_mutex.lock().unwrap());
                 }
             }
             Event::Key(KeyEvent {
@@ -338,8 +430,9 @@ fn get_choice_from_user(
                 kind: KeyEventKind::Press,
                 ..
             }) => {
+                let settings = settings_mutex.lock().unwrap();
                 if let InputType::Keyboard = settings.input_type {
-                    select_coords.1 = max(0, min(select_coords.1 - 1, settings.width - 1));
+                    cell_pos.x = max(0, min(cell_pos.x - 1, settings.width - 1));
                 }
             }
             Event::Key(KeyEvent {
@@ -347,8 +440,9 @@ fn get_choice_from_user(
                 kind: KeyEventKind::Press,
                 ..
             }) => {
+                let settings = settings_mutex.lock().unwrap();
                 if let InputType::Keyboard = settings.input_type {
-                    select_coords.1 = max(0, min(select_coords.1 + 1, settings.width - 1));
+                    cell_pos.x = max(0, min(cell_pos.x + 1, settings.width - 1));
                 }
             }
             Event::Key(KeyEvent {
@@ -356,8 +450,9 @@ fn get_choice_from_user(
                 kind: KeyEventKind::Press,
                 ..
             }) => {
+                let settings = settings_mutex.lock().unwrap();
                 if let InputType::Keyboard = settings.input_type {
-                    select_coords.0 = max(0, min(select_coords.0 - 1, settings.height - 1));
+                    cell_pos.y = max(0, min(cell_pos.y - 1, settings.height - 1));
                 }
             }
             Event::Key(KeyEvent {
@@ -365,8 +460,9 @@ fn get_choice_from_user(
                 kind: KeyEventKind::Press,
                 ..
             }) => {
+                let settings = settings_mutex.lock().unwrap();
                 if let InputType::Keyboard = settings.input_type {
-                    select_coords.0 = max(0, min(select_coords.0 + 1, settings.height - 1));
+                    cell_pos.y = max(0, min(cell_pos.y + 1, settings.height - 1));
                 }
             }
             Event::Key(KeyEvent {
@@ -374,6 +470,7 @@ fn get_choice_from_user(
                 kind: KeyEventKind::Press,
                 ..
             }) => {
+                let settings = settings_mutex.lock().unwrap();
                 if let InputType::Keyboard = settings.input_type {
                     choice = Choice::Click;
                     break;
@@ -383,7 +480,47 @@ fn get_choice_from_user(
                 code: KeyCode::Char('f'),
                 kind: KeyEventKind::Press,
                 ..
-            }) => flag(&mut board, select_coords.1, select_coords.0),
+            }) => flag(&mut board, cell_pos, &settings_mutex.lock().unwrap()),
+            Event::Key(KeyEvent {
+                code: KeyCode::Up,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                let settings = &mut settings_mutex.lock().unwrap();
+                settings.board_y_pos = (settings.board_y_pos as i32 - 1).max(0) as u32;
+                display_board(board, settings);
+                tx.send(board.clone()).unwrap();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Down,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                let settings = &mut settings_mutex.lock().unwrap();
+                settings.board_y_pos += 1;
+                display_board(board, settings);
+                tx.send(board.clone()).unwrap();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Right,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                let settings = &mut settings_mutex.lock().unwrap();
+                settings.board_x_pos += 1;
+                display_board(board, settings);
+                tx.send(board.clone()).unwrap();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Left,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                let settings = &mut settings_mutex.lock().unwrap();
+                settings.board_x_pos = (settings.board_x_pos as i32 - 1).max(0) as u32;
+                display_board(board, settings);
+                tx.send(board.clone()).unwrap();
+            }
             Event::Key(KeyEvent {
                 code: KeyCode::Esc,
                 kind: KeyEventKind::Press,
@@ -394,13 +531,13 @@ fn get_choice_from_user(
             }
             _ => {}
         }
-        if select_coords != previous_select_coords {
-            board[previous_select_coords.0 as usize][previous_select_coords.1 as usize].selected =
-                false;
-            update_cell(&board, previous_select_coords);
-            board[select_coords.0 as usize][select_coords.1 as usize].selected = true;
-            update_cell(&board, select_coords);
-            previous_select_coords = select_coords;
+        if cell_pos != previous_select_pos {
+            let settings = &mut settings_mutex.lock().unwrap();
+            board[previous_select_pos.y as usize][previous_select_pos.x as usize].selected = false;
+            update_cell(&board, previous_select_pos, settings);
+            board[cell_pos.y as usize][cell_pos.x as usize].selected = true;
+            update_cell(&board, cell_pos, settings);
+            previous_select_pos = cell_pos;
             tx.send(board.clone()).unwrap();
         }
     }
@@ -408,15 +545,7 @@ fn get_choice_from_user(
     stdout().execute(ResetColor).unwrap();
     thread_flag.store(true, Ordering::Relaxed);
     handle.join().unwrap();
-    (choice, select_coords.0 as i32, select_coords.1 as i32)
-}
-fn update_cell(board: &Vec<Vec<Cell>>, pos: (i32, i32)) {
-    stdout().execute(SavePosition).unwrap();
-    stdout()
-        .execute(MoveTo((pos.1 * 3) as u16, (pos.0) as u16))
-        .unwrap();
-    display_cell(&board[pos.0 as usize][pos.1 as usize]);
-    stdout().execute(RestorePosition).unwrap();
+    (choice, cell_pos.y as i32, cell_pos.x as i32)
 }
 fn get_settings(mut settings: Settings) -> Settings {
     let settings_options = vec!["Play", "Difficulty", "Controls", "Appearance", "Exit"];
@@ -438,8 +567,10 @@ fn get_settings(mut settings: Settings) -> Settings {
 }
 fn get_appearance_settings(settings: &mut Settings) {
     let appearance_options = vec!["Centered", "Bordered"];
-    let appearance = MultiSelect::new()
+    let defaults = vec![settings.centered, settings.bordered];
+    let appearance = MultiSelect::with_theme(&ColorfulTheme::default())
         .items(&appearance_options)
+        .defaults(&defaults)
         .interact()
         .unwrap();
     settings.bordered = false;
@@ -451,7 +582,6 @@ fn get_appearance_settings(settings: &mut Settings) {
             _ => {}
         }
     }
-    println!("{:#?}", settings);
 }
 fn select_input_type(settings: &mut Settings) {
     let input_options = vec!["Mouse", "Keyboard"]; //Todo Add Custom diffiuclty
@@ -546,7 +676,7 @@ fn exit_gracefully() {
     stdout().execute(Show).unwrap();
     process::exit(0);
 }
-fn reveal_board(board: &mut Vec<Vec<Cell>>) {
+fn reveal_board(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
     let mut cells_to_update: Vec<(i32, i32)> = vec![];
     for (x, i) in board.iter_mut().enumerate() {
         for (y, j) in i.iter_mut().enumerate() {
@@ -558,7 +688,14 @@ fn reveal_board(board: &mut Vec<Vec<Cell>>) {
         }
     }
     for cell in cells_to_update {
-        update_cell(&board, (cell.0 as i32, cell.1 as i32));
+        update_cell(
+            &board,
+            CellPos {
+                x: cell.1 as i32,
+                y: cell.0 as i32,
+            },
+            settings,
+        );
     }
 }
 fn initialize_free_cells(board: &Vec<Vec<Cell>>) -> Vec<(usize, usize)> {
@@ -573,7 +710,7 @@ fn initialize_free_cells(board: &Vec<Vec<Cell>>) -> Vec<(usize, usize)> {
     hidden_cells
 }
 fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
-    clear();
+    clear(&mut settings);
     loop {
         if !go_directly_to_game {
             settings = get_settings(settings);
@@ -591,12 +728,16 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
             ];
             settings.height as usize
         ];
-        clear();
-        let select_coords = (settings.height / 2 as i32, settings.width / 2 as i32);
-        board[select_coords.0 as usize][select_coords.1 as usize].selected = true;
-        display_board(&board, &settings);
+        clear(&mut settings);
+        let select_pos = CellPos {
+            x: settings.width / 2,
+            y: settings.height / 2,
+        };
+        board[select_pos.y as usize][select_pos.x as usize].selected = true;
+        display_board(&board, &mut settings);
+        let settings_mutex = Arc::new(Mutex::new(settings));
         let (mut choice, mut row_number, mut column_number) =
-            get_choice_from_user(&mut board, &settings, select_coords);
+            get_choice_from_user(&mut board, Arc::clone(&settings_mutex), select_pos);
         place_mines(&mut board, &settings, (row_number, column_number));
         place_numbers(&mut board, &settings);
         let mut hidden_cells = initialize_free_cells(&board);
@@ -612,9 +753,23 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
                 break;
             }
             (choice, row_number, column_number) =
-                get_choice_from_user(&mut board, &settings, select_coords);
+                get_choice_from_user(&mut board, Arc::clone(&settings_mutex), select_pos);
         }
+        let terminal_size = get_terminal_size();
         let options = vec!["Play Again", "Main Menu", "Exit"];
+        let y_pos =
+            (settings.board_y_pos + settings.height as u32 + 2 + settings.bordered as u32) as u16;
+        if !settings.centered && y_pos < terminal_size.1 as u16 - options.len() as u16 {
+            stdout()
+                .execute(MoveTo(
+                    0,
+                    (settings.board_y_pos + settings.height as u32 + 2 + settings.bordered as u32)
+                        as u16,
+                ))
+                .unwrap();
+        } else {
+            stdout().execute(MoveTo(0, 0)).unwrap();
+        }
         let choice = Select::with_theme(&ColorfulTheme::default())
             .items(&options)
             .interact()
@@ -627,10 +782,9 @@ fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
         }
     }
 }
-
 fn game_play_loop_node(
     board: &mut Vec<Vec<Cell>>,
-    settings: Settings,
+    mut settings: Settings,
     choice: &Choice,
     row_number: i32,
     column_number: i32,
@@ -649,11 +803,11 @@ fn game_play_loop_node(
                         stdout()
                             .execute(MoveTo(0, (settings.height + 1) as u16))
                             .unwrap();
-                        reveal_board(board);
+                        reveal_board(board, &settings);
                     } else {
-                        clear();
+                        clear(&mut settings);
                     }
-                    println!("You died.");
+                    print_string("You died.", &settings);
                     return ControlFlow::Break(());
                 }
                 Click::Fine => {}
@@ -663,23 +817,70 @@ fn game_play_loop_node(
                     stdout()
                         .execute(MoveTo(0, (settings.height + 1) as u16))
                         .unwrap();
-                    reveal_board(board);
+                    reveal_board(board, &settings);
                 } else {
-                    clear();
+                    clear(&mut settings);
                 }
-                println!("You win!");
+                print_string("You win!", &settings);
                 return ControlFlow::Break(());
             }
         }
     };
     ControlFlow::Continue(())
 }
+fn print_string(string: &str, settings: &Settings) {
+    let mut string_x_pos = settings.board_x_pos as u16;
+    if settings.bordered {
+        string_x_pos = (string_x_pos - 1).max(0);
+    }
+    let string_y_pos = (settings.board_y_pos as i32
+        + settings.height
+        + settings.str_y_pos as i32
+        + settings.bordered as i32) as u16;
+
+    stdout()
+        .execute(MoveTo(string_x_pos, string_y_pos))
+        .unwrap();
+    print!("{}", string);
+}
+
 #[derive(Debug, Copy, Clone)]
 struct Cell {
     hidden: bool,
     element: char,
     flagged: bool,
     selected: bool,
+}
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+struct MousePos {
+    x: i32,
+    y: i32,
+}
+impl MousePos {
+    fn convert(&self, settings: &Settings) -> CellPos {
+        let cell_pos = CellPos {
+            x: ((self.x - settings.board_x_pos as i32) / 3)
+                .max(0)
+                .min(settings.width - 1),
+            y: (self.y - settings.board_y_pos as i32)
+                .max(0)
+                .min(settings.height - 1),
+        };
+        cell_pos
+    }
+}
+impl CellPos {
+    fn convert(&self, settings: &Settings) -> MousePos {
+        MousePos {
+            x: self.x + settings.board_x_pos as i32,
+            y: self.y + settings.board_y_pos as i32,
+        }
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+struct CellPos {
+    x: i32,
+    y: i32,
 }
 enum Choice {
     Click,
@@ -710,6 +911,9 @@ struct Settings {
     input_type: InputType,
     bordered: bool,
     centered: bool,
+    board_x_pos: u32,
+    board_y_pos: u32,
+    str_y_pos: u32,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -718,8 +922,11 @@ impl Default for Settings {
             width: 8,
             height: 8,
             input_type: InputType::Mouse,
-            bordered: true,
-            centered: true,
+            bordered: false,
+            centered: false,
+            board_x_pos: 0,
+            board_y_pos: 0,
+            str_y_pos: 0,
         }
     }
 }
