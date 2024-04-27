@@ -92,7 +92,7 @@ fn display_board(board: &Vec<Vec<Cell>>, settings: &mut Settings) {
                     stdout()
                         .execute(MoveTo(move_to_x as u16, move_to_y as u16))
                         .unwrap();
-                    print!("{}", White.on(Black).paint("###"));
+                    print!("{}", White.on(Black).paint("━━━"));
                 }
             }
         }
@@ -112,7 +112,23 @@ fn display_board(board: &Vec<Vec<Cell>>, settings: &mut Settings) {
                     stdout()
                         .execute(MoveTo(move_to_x as u16, move_to_y as u16))
                         .unwrap();
-                    print!("{}", White.on(Black).paint("#"));
+                    let char: &str;
+                    if i == -1 {
+                        char = match j {
+                            0 => "┏",
+                            1 => "┓",
+                            _ => "",
+                        };
+                    } else if i == settings.height {
+                        char = match j {
+                            0 => "┗",
+                            1 => "┛",
+                            _ => "",
+                        };
+                    } else {
+                        char = "┃";
+                    }
+                    print!("{}", White.on(Black).paint(char));
                 }
             }
         }
