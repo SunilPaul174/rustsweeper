@@ -64,6 +64,11 @@ You can customize controls and adjust game difficulty using the in-game menu:
 - Alternatively, choose "Custom" to specify custom settings, including board width, board height, and the number of mines.
 - The size of your terminal determines the max height and length.
 
+You can also change the appearance of the board using the same menu:
+- Go to the main menu.
+- Select the "Appearance" option.
+- Select whether you want a border around your board and/or want it centered.
+
 ## Contributing
 
 Contributions are welcome! If you find any bugs or have suggestions for improvement, feel free to open an issue or submit a pull request.
