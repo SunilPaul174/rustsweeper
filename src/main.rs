@@ -69,7 +69,7 @@ fn display_board(board: &Vec<Vec<Cell>>, settings: &mut Settings) {
     }
     let mut tip_pos = (
         settings.board_x_pos as i32,
-        settings.height + settings.board_y_pos as i32 - 1,
+        settings.height + settings.board_y_pos as i32,
     );
     let mut y_limit = terminal_size.1;
     if settings.bordered {
@@ -81,7 +81,7 @@ fn display_board(board: &Vec<Vec<Cell>>, settings: &mut Settings) {
                 let move_to_x = settings.board_x_pos as i32 + i * 3;
                 let mut move_to_y = settings.board_y_pos as i32 - 1;
                 match j {
-                    1 => move_to_y += settings.width + 1,
+                    1 => move_to_y += settings.height + 1,
                     _ => {}
                 }
                 if move_to_x >= 0
