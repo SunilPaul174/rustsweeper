@@ -580,7 +580,15 @@ fn get_settings(settings: &mut Settings) {
 fn get_appearance_settings(settings: &mut Settings) {
     let appearance_options = vec!["Centered", "Bordered"];
     let defaults = vec![settings.centered, settings.bordered];
-    let appearance = MultiSelect::with_theme(&ColorfulTheme::default())
+    let mut theme = ColorfulTheme::default();
+    theme.defaults_style = dialoguer::console::Style::new().red();
+    let green_style = dialoguer::console::Style::new().green().bold();
+    let black_style = dialoguer::console::Style::new().black();
+    let checked_item_prefix = green_style.apply_to("✓".to_owned());
+    let unchecked_item_prefix = black_style.apply_to("☐".to_owned());
+    theme.checked_item_prefix = checked_item_prefix;
+    theme.unchecked_item_prefix = unchecked_item_prefix;
+    let appearance = MultiSelect::with_theme(&theme)
         .items(&appearance_options)
         .defaults(&defaults)
         .interact()
