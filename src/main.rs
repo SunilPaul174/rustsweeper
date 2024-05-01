@@ -751,6 +751,7 @@ fn initialize_free_cells(board: &Vec<Vec<Cell>>) -> Vec<(usize, usize)> {
 }
 fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
     clear(&mut settings);
+    center_board(&mut settings);
     loop {
         if !go_directly_to_game {
             get_settings(&mut settings);
