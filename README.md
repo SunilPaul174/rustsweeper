@@ -4,7 +4,7 @@
 
 ## Overview
 
-This repository contains a basic command-line Minesweeper program written in Rust.
+This repository contains a command-line Minesweeper program written in Rust.
 
 ## Installation
 
