@@ -2,6 +2,11 @@
 name = "rustsweeper"
 version = "1.4.1"
 edition = "2021"
+description = "A command-line Minesweeper program written in Rust."
+readme = "README.md"
+repository = "https://github.com/AidenPierce616/rustsweeper"
+exclude = ["/gifs", "target"]
+publish = ["crates.io"]
 
 [dependencies]
 ansi_term = "0.12.1"
