@@ -8,9 +8,17 @@ This repository contains a command-line Minesweeper program written in Rust.
 
 ## Installation
 
-You can play the game by either downloading the executable or building it yourself. 
+You can play the game by either downloading the executable, installing from crates.io, or building it yourself. 
 
-You can find the latest releases (with executables) [here](https://github.com/AidenPierce616/rustsweeper/releases).
+You can find the crates.io package [here](https://crates.io/crates/rustsweeper)
+
+To build Rustsweeper from crates.io, you need to have Rust installed on your system. If Rust is not installed, you can download and install it from [here](https://www.rust-lang.org/tools/install).
+
+```
+cargo install rustsweeper
+```
+
+Alternatively, you can find the latest releases (with executables) [here](https://github.com/AidenPierce616/rustsweeper/releases).
 
 To build it, please take a look at the section below.
 ## Building
