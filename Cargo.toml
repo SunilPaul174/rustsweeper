@@ -14,3 +14,10 @@ rand = "0.8.5"
 crossterm = "0.27.0"
 dialoguer = "0.11.0"
 terminal_size = "0.3.0"
+
+[profile.release]
+codegen-units = 1
+lto = 'fat'
+opt-level = 2
+panic = "abort"
+strip = "symbols"
