@@ -1,6 +1,6 @@
 [package]
 name = "rustsweeper"
-version = "1.4.1"
+version = "1.4.2"
 edition = "2021"
 description = "A command-line Minesweeper program written in Rust."
 readme = "README.md"
