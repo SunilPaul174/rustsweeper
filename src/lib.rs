@@ -1,37 +1,32 @@
+use ansi_term::{
+    ANSIGenericString,
+    Color::{Black, White, RGB},
+};
+use crossterm::{
+    cursor::{Hide, MoveTo, Show},
+    event::{
+        read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
+        MouseButton, MouseEvent, MouseEventKind,
+    },
+    execute,
+    style::ResetColor,
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
+    ExecutableCommand,
+};
+use dialoguer::{theme::ColorfulTheme, Input, MultiSelect, Select};
+use rand::prelude::SliceRandom;
 use std::{
-    cmp::{max,min},
+    cmp::{max, min},
     collections::HashMap,
     io::stdout,
     ops::ControlFlow,
-    sync::{
-        Arc,
-        Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
     process,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     thread,
 };
-use ansi_term::{
-    ANSIGenericString,
-    Color::{Black,RGB,White}
-};
-use crossterm::{
-    cursor::{Hide,MoveTo,Show},
-    ExecutableCommand,
-    execute,
-    event::{
-        DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind, read
-    },
-    style::ResetColor,
-    terminal::{
-        Clear, ClearType, disable_raw_mode, enable_raw_mode
-    }
-};
-use dialoguer::{
-    Input, MultiSelect, Select,
-    theme::ColorfulTheme
-};
-use rand::prelude::SliceRandom;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Cell {
@@ -191,58 +186,12 @@ fn display_board(board: &Vec<Vec<Cell>>, settings: &mut Settings) {
         tip_pos.0 -= 1;
         for j in 0..2 {
             for i in 0..settings.width {
-                let move_to_x = settings.board_x_pos as i32 + i * 3;
-                let mut move_to_y = settings.board_y_pos as i32 - 1;
-                match j {
-                    1 => move_to_y += settings.height + 1,
-                    _ => {}
-                }
-                if move_to_x >= 0
-                    && move_to_x < terminal_size.0
-                    && move_to_y >= 0
-                    && move_to_y < terminal_size.1
-                {
-                    stdout()
-                        .execute(MoveTo(move_to_x as u16, move_to_y as u16))
-                        .unwrap();
-                    print!("{}", White.on(Black).paint("━━━"));
-                }
+                draw_x(settings, i, j, terminal_size);
             }
         }
         for j in 0..2 {
             for i in -1..settings.height + 1 {
-                let mut move_to_x = settings.board_x_pos as i32 - 1;
-                let move_to_y = settings.board_y_pos as i32 + i;
-                match j {
-                    1 => move_to_x += settings.width * 3 + 1,
-                    _ => {}
-                }
-                if move_to_x >= 0
-                    && move_to_x < terminal_size.0
-                    && move_to_y >= 0
-                    && move_to_y < terminal_size.1
-                {
-                    stdout()
-                        .execute(MoveTo(move_to_x as u16, move_to_y as u16))
-                        .unwrap();
-                    let char: &str;
-                    if i == -1 {
-                        char = match j {
-                            0 => "┏",
-                            1 => "┓",
-                            _ => "",
-                        };
-                    } else if i == settings.height {
-                        char = match j {
-                            0 => "┗",
-                            1 => "┛",
-                            _ => "",
-                        };
-                    } else {
-                        char = "┃";
-                    }
-                    print!("{}", White.on(Black).paint(char));
-                }
+                draw_y(settings, i, j, terminal_size);
             }
         }
     }
@@ -259,6 +208,60 @@ fn display_board(board: &Vec<Vec<Cell>>, settings: &mut Settings) {
                 settings,
             );
         }
+    }
+}
+
+fn draw_y(settings: &mut Settings, i: i32, j: i32, terminal_size: (i32, i32)) {
+    let mut move_to_x = settings.board_x_pos as i32 - 1;
+    let move_to_y = settings.board_y_pos as i32 + i;
+    match j {
+        1 => move_to_x += settings.width * 3 + 1,
+        _ => {}
+    }
+    if move_to_x >= 0
+        && move_to_x < terminal_size.0
+        && move_to_y >= 0
+        && move_to_y < terminal_size.1
+    {
+        stdout()
+            .execute(MoveTo(move_to_x as u16, move_to_y as u16))
+            .unwrap();
+        let char: &str;
+        if i == -1 {
+            char = match j {
+                0 => "┏",
+                1 => "┓",
+                _ => "",
+            };
+        } else if i == settings.height {
+            char = match j {
+                0 => "┗",
+                1 => "┛",
+                _ => "",
+            };
+        } else {
+            char = "┃";
+        }
+        print!("{}", White.on(Black).paint(char));
+    }
+}
+
+fn draw_x(settings: &mut Settings, i: i32, j: i32, terminal_size: (i32, i32)) {
+    let move_to_x = settings.board_x_pos as i32 + i * 3;
+    let mut move_to_y = settings.board_y_pos as i32 - 1;
+    match j {
+        1 => move_to_y += settings.height + 1,
+        _ => {}
+    }
+    if move_to_x >= 0
+        && move_to_x < terminal_size.0
+        && move_to_y >= 0
+        && move_to_y < terminal_size.1
+    {
+        stdout()
+            .execute(MoveTo(move_to_x as u16, move_to_y as u16))
+            .unwrap();
+        print!("{}", White.on(Black).paint("━━━"));
     }
 }
 
@@ -305,9 +308,9 @@ fn get_choice_from_user(
         stdout().execute(Hide).unwrap();
         match read().unwrap() {
             Event::Mouse(MouseEvent {
-                             kind: MouseEventKind::Down(MouseButton::Left),
-                             ..
-                         }) => {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                ..
+            }) => {
                 let settings_guard = settings_mutex.lock().unwrap();
                 if let InputType::Mouse = settings_guard.input_type {
                     choice = Choice::Click;
@@ -325,10 +328,10 @@ fn get_choice_from_user(
                 drop(settings_guard);
             }
             Event::Key(KeyEvent {
-                           code: KeyCode::Char('a'),
-                           kind: KeyEventKind::Press,
-                           ..
-                       }) => {
+                code: KeyCode::Char('a'),
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let settings_guard = settings_mutex.lock().unwrap();
                 if let InputType::Keyboard = settings_guard.input_type {
                     cell_pos.x = max(0, min(cell_pos.x - 1, settings_guard.width - 1));
@@ -336,10 +339,10 @@ fn get_choice_from_user(
                 drop(settings_guard);
             }
             Event::Key(KeyEvent {
-                           code: KeyCode::Char('d'),
-                           kind: KeyEventKind::Press,
-                           ..
-                       }) => {
+                code: KeyCode::Char('d'),
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let settings_guard = settings_mutex.lock().unwrap();
                 if let InputType::Keyboard = settings_guard.input_type {
                     cell_pos.x = max(0, min(cell_pos.x + 1, settings_guard.width - 1));
@@ -347,10 +350,10 @@ fn get_choice_from_user(
                 drop(settings_guard);
             }
             Event::Key(KeyEvent {
-                           code: KeyCode::Char('w'),
-                           kind: KeyEventKind::Press,
-                           ..
-                       }) => {
+                code: KeyCode::Char('w'),
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let settings_guard = settings_mutex.lock().unwrap();
                 if let InputType::Keyboard = settings_guard.input_type {
                     cell_pos.y = max(0, min(cell_pos.y - 1, settings_guard.height - 1));
@@ -358,10 +361,10 @@ fn get_choice_from_user(
                 drop(settings_guard);
             }
             Event::Key(KeyEvent {
-                           code: KeyCode::Char('s'),
-                           kind: KeyEventKind::Press,
-                           ..
-                       }) => {
+                code: KeyCode::Char('s'),
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let settings_guard = settings_mutex.lock().unwrap();
                 if let InputType::Keyboard = settings_guard.input_type {
                     cell_pos.y = max(0, min(cell_pos.y + 1, settings_guard.height - 1));
@@ -369,10 +372,10 @@ fn get_choice_from_user(
                 drop(settings_guard);
             }
             Event::Key(KeyEvent {
-                           code: KeyCode::Char('c'),
-                           kind: KeyEventKind::Press,
-                           ..
-                       }) => {
+                code: KeyCode::Char('c'),
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let settings_guard = settings_mutex.lock().unwrap();
                 if let InputType::Keyboard = settings_guard.input_type {
                     choice = Choice::Click;
@@ -381,15 +384,15 @@ fn get_choice_from_user(
                 drop(settings_guard);
             }
             Event::Key(KeyEvent {
-                           code: KeyCode::Char('f'),
-                           kind: KeyEventKind::Press,
-                           ..
-                       }) => flag(&mut board, cell_pos, &settings_mutex.lock().unwrap()),
+                code: KeyCode::Char('f'),
+                kind: KeyEventKind::Press,
+                ..
+            }) => flag(&mut board, cell_pos, &settings_mutex.lock().unwrap()),
             Event::Key(KeyEvent {
-                           code: KeyCode::Up,
-                           kind: KeyEventKind::Press,
-                           ..
-                       }) => {
+                code: KeyCode::Up,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let mut settings_guard = settings_mutex.lock().unwrap();
                 settings_guard.board_y_pos = (settings_guard.board_y_pos as i32 - 1).max(0) as u32;
                 display_board(board, &mut settings_guard);
@@ -397,10 +400,10 @@ fn get_choice_from_user(
                 drop(settings_guard);
             }
             Event::Key(KeyEvent {
-                           code: KeyCode::Down,
-                           kind: KeyEventKind::Press,
-                           ..
-                       }) => {
+                code: KeyCode::Down,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let mut settings_guard = settings_mutex.lock().unwrap();
                 settings_guard.board_y_pos += 1;
                 display_board(board, &mut settings_guard);
@@ -408,10 +411,10 @@ fn get_choice_from_user(
                 drop(settings_guard);
             }
             Event::Key(KeyEvent {
-                           code: KeyCode::Right,
-                           kind: KeyEventKind::Press,
-                           ..
-                       }) => {
+                code: KeyCode::Right,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let mut settings_guard = settings_mutex.lock().unwrap();
                 settings_guard.board_x_pos += 1;
                 display_board(board, &mut settings_guard);
@@ -419,10 +422,10 @@ fn get_choice_from_user(
                 drop(settings_guard);
             }
             Event::Key(KeyEvent {
-                           code: KeyCode::Left,
-                           kind: KeyEventKind::Press,
-                           ..
-                       }) => {
+                code: KeyCode::Left,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let mut settings_guard = settings_mutex.lock().unwrap();
                 settings_guard.board_x_pos = (settings_guard.board_x_pos as i32 - 1).max(0) as u32;
                 display_board(board, &mut settings_guard);
@@ -430,10 +433,10 @@ fn get_choice_from_user(
                 drop(settings_guard);
             }
             Event::Key(KeyEvent {
-                           code: KeyCode::Esc,
-                           kind: KeyEventKind::Press,
-                           ..
-                       }) => {
+                code: KeyCode::Esc,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 choice = Choice::Exit;
                 break;
             }
