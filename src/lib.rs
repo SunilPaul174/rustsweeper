@@ -1,80 +1,37 @@
-use std::cmp::{max, min};
-use std::collections::HashMap;
-use std::io::stdout;
-use std::ops::ControlFlow;
-use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::{process, thread};
-use ansi_term::ANSIGenericString;
-use ansi_term::Color::{Black, RGB, White};
-use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::{ExecutableCommand, execute};
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind, read};
-use crossterm::style::ResetColor;
-use crossterm::terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode};
-use dialoguer::{Input, MultiSelect, Select};
-use dialoguer::theme::ColorfulTheme;
+use std::{
+    cmp::{max,min},
+    collections::HashMap,
+    io::stdout,
+    ops::ControlFlow,
+    sync::{
+        Arc,
+        Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    process,
+    thread,
+};
+use ansi_term::{
+    ANSIGenericString,
+    Color::{Black,RGB,White}
+};
+use crossterm::{
+    cursor::{Hide,MoveTo,Show},
+    ExecutableCommand,
+    execute,
+    event::{
+        DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind, read
+    },
+    style::ResetColor,
+    terminal::{
+        Clear, ClearType, disable_raw_mode, enable_raw_mode
+    }
+};
+use dialoguer::{
+    Input, MultiSelect, Select,
+    theme::ColorfulTheme
+};
 use rand::prelude::SliceRandom;
-
-pub fn game_play_loop_node(
-    board: &mut Vec<Vec<Cell>>,
-    settings: &mut Settings,
-    choice: &Choice,
-    cell_pos: CellPos,
-    hidden_cells: &mut Vec<(usize, usize)>,
-) -> ControlFlow<()> {
-    match choice {
-        Choice::Exit => {
-            main_menu(settings.clone(), false);
-        }
-        Choice::Click => {
-            let terminal_size = get_terminal_size();
-            let event = event(cell_pos, board, &settings, hidden_cells);
-            match event {
-                Click::Dead => {
-                    if terminal_size.1 > settings.height + 4 {
-                        reveal_board(board, settings);
-                    } else {
-                        clear(settings);
-                    }
-                    print_string("You died.", settings);
-                    return ControlFlow::Break(());
-                }
-                Click::Fine => {}
-            }
-            if won(hidden_cells) {
-                if terminal_size.1 > settings.height + 4 {
-                    reveal_board(board, settings);
-                } else {
-                    clear(settings);
-                }
-                print_string("You win!", settings);
-                return ControlFlow::Break(());
-            }
-        }
-    };
-    ControlFlow::Continue(())
-}
-pub fn print_string(string: &str, settings: &mut Settings) {
-    let mut string_x_pos = settings.board_x_pos as u16;
-    if settings.bordered {
-        string_x_pos = (string_x_pos as i32 - 1).max(0) as u16;
-    }
-    if settings.centered {
-        string_x_pos = (string_x_pos as i32 - (string.len() / 2) as i32 + (settings.width * 3) / 2)
-            .max(0) as u16;
-    }
-    let mut string_y_pos = settings.str_y_pos as u16;
-    if settings.showing_board {
-        string_y_pos +=
-            (settings.board_y_pos as i32 + settings.height + settings.bordered as i32) as u16;
-    }
-    stdout()
-        .execute(MoveTo(string_x_pos, string_y_pos))
-        .unwrap();
-    print!("{}", string);
-    settings.str_y_pos += 1;
-}
 
 #[derive(Debug, Copy, Clone)]
 pub struct Cell {
@@ -89,7 +46,7 @@ pub struct MousePos {
     y: i32,
 }
 impl MousePos {
-    pub fn convert(&self, settings: &Settings) -> CellPos {
+    fn convert(&self, settings: &Settings) -> CellPos {
         let cell_pos = CellPos {
             x: ((self.x - settings.board_x_pos as i32) / 3)
                 .max(0)
@@ -101,6 +58,12 @@ impl MousePos {
         cell_pos
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+struct CellPos {
+    x: i32,
+    y: i32,
+}
 impl CellPos {
     pub fn convert(&self, settings: &Settings) -> MousePos {
         MousePos {
@@ -109,31 +72,7 @@ impl CellPos {
         }
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-struct CellPos {
-    x: i32,
-    y: i32,
-}
-enum Choice {
-    Click,
-    Exit,
-}
-enum Difficulty {
-    Easy,
-    Normal,
-    Hard,
-    Custom,
-}
-#[derive(Debug, Clone, Copy)]
-enum InputType {
-    Mouse,
-    Keyboard,
-}
-#[derive(PartialEq)]
-enum Click {
-    Dead,
-    Fine,
-}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Settings {
     mines: i32,
@@ -164,6 +103,27 @@ impl Default for Settings {
     }
 }
 
+enum Choice {
+    Click,
+    Exit,
+}
+enum Difficulty {
+    Easy,
+    Normal,
+    Hard,
+    Custom,
+}
+#[derive(Debug, Clone, Copy)]
+enum InputType {
+    Mouse,
+    Keyboard,
+}
+#[derive(PartialEq)]
+enum Click {
+    Dead,
+    Fine,
+}
+
 fn clear(settings: &mut Settings) {
     execute!(stdout(), Clear(ClearType::All)).unwrap();
     print!("\x1B[2J\x1B[1;1H");
@@ -172,28 +132,45 @@ fn clear(settings: &mut Settings) {
     settings.str_y_pos = 0;
     settings.showing_board = false;
 }
-fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords: CellPos) {
-    let cell_amount = settings.width * settings.height;
-    let mut indices: Vec<usize> = vec![];
-    for i in 0..cell_amount as usize {
-        let column_number = (i as i32) / settings.width;
-        let row_number = (i as i32) % settings.width;
-        if (starting_coords.y - column_number).abs() <= 1 {
-            if (starting_coords.x - row_number).abs() <= 1 {
-                continue;
-            }
+
+fn center_board(settings: &mut Settings) {
+    let terminal_size = get_terminal_size();
+    if settings.centered {
+        settings.board_x_pos = ((terminal_size.0 / 2 - (settings.width * 3) / 2).max(0)) as u32;
+        settings.board_y_pos = ((terminal_size.1 / 2 - settings.height / 2).max(0)) as u32;
+        if settings.bordered {
+            settings.board_x_pos = (settings.board_x_pos as i32 - 1).max(1) as u32;
+            settings.board_y_pos = (settings.board_y_pos as i32 - 1).max(1) as u32;
         }
-        indices.push(i);
-    }
-    let choices: Vec<&usize> = indices
-        .choose_multiple(&mut rand::thread_rng(), settings.mines as usize)
-        .collect();
-    for index in choices {
-        let row_index = index / settings.width as usize;
-        let column_index = index % settings.width as usize;
-        board[row_index][column_index].element = 'M';
+    } else {
+        if settings.bordered {
+            settings.board_x_pos = 1;
+            settings.board_y_pos = 1;
+        } else {
+            settings.board_x_pos = 0;
+            settings.board_y_pos = 0;
+        }
     }
 }
+
+fn get_settings(settings: &mut Settings) {
+    let settings_options = vec!["Play", "Difficulty", "Controls", "Appearance", "Exit"];
+    loop {
+        let setting = Select::with_theme(&ColorfulTheme::default())
+            .items(&settings_options)
+            .interact()
+            .unwrap();
+        match setting {
+            0 => break,
+            1 => select_difficulty(settings),
+            2 => select_input_type(settings),
+            3 => get_appearance_settings(settings),
+            4 => exit_gracefully(),
+            _ => {}
+        }
+    }
+}
+
 fn display_board(board: &Vec<Vec<Cell>>, settings: &mut Settings) {
     disable_raw_mode().unwrap();
     clear(settings);
@@ -284,223 +261,7 @@ fn display_board(board: &Vec<Vec<Cell>>, settings: &mut Settings) {
         }
     }
 }
-fn update_cell(board: &Vec<Vec<Cell>>, cell_pos: CellPos, settings: &Settings) {
-    let mut x_pos: u16 = (cell_pos.x * 3) as u16;
-    let mut y_pos: u16 = (cell_pos.y) as u16;
-    x_pos += settings.board_x_pos as u16;
-    y_pos += settings.board_y_pos as u16;
-    let terminal_size = get_terminal_size();
-    if x_pos as i32 >= terminal_size.0 {
-        return;
-    }
-    if y_pos as i32 >= terminal_size.0 {
-        return;
-    }
-    stdout().execute(MoveTo(x_pos, y_pos)).unwrap();
-    display_cell(&board[cell_pos.y as usize][cell_pos.x as usize]);
-}
-fn display_cell(cell: &Cell) {
-    let display_string;
-    if cell.flagged == false {
-        if cell.hidden == true {
-            display_string = get_display_string('#', cell.selected);
-        } else {
-            if cell.element == '0' {
-                display_string = get_display_string(' ', cell.selected);
-            } else {
-                display_string = get_display_string(cell.element, cell.selected);
-            }
-        }
-    } else {
-        display_string = get_display_string('⚑', cell.selected);
-    }
-    print!("{display_string}");
-}
-fn get_display_string(character: char, is_selected: bool) -> ANSIGenericString<'static, str> {
-    let board_objects_map: HashMap<char, ANSIGenericString<'static, str>>;
-    if !is_selected {
-        board_objects_map = HashMap::from([
-            ('M', RGB(0, 0, 0).on(White).bold().paint(" ✹ ")),
-            ('1', RGB(6, 3, 255).on(White).bold().paint(" 1 ")),
-            ('2', RGB(3, 122, 6).on(White).bold().paint(" 2 ")),
-            ('3', RGB(254, 0, 0).on(White).bold().paint(" 3 ")),
-            ('4', RGB(0, 0, 132).on(White).bold().paint(" 4 ")),
-            ('5', RGB(130, 1, 2).on(White).bold().paint(" 5 ")),
-            ('6', RGB(2, 127, 130).on(White).bold().paint(" 6 ")),
-            ('7', RGB(0, 0, 0).on(White).bold().paint(" 7 ")),
-            ('8', RGB(125, 125, 125).on(White).bold().paint(" 8 ")),
-            ('#', Black.on(Black).bold().paint("   ")),
-            ('⚑', White.on(Black).bold().paint(" ⚑ ")),
-            (' ', White.on(White).bold().paint("   ")),
-        ]);
-    } else {
-        board_objects_map = HashMap::from([
-            ('M', RGB(0, 0, 0).on(RGB(144, 238, 144)).bold().paint(" ✹ ")),
-            (
-                '1',
-                RGB(6, 3, 255).on(RGB(144, 238, 144)).bold().paint(" 1 "),
-            ),
-            (
-                '2',
-                RGB(3, 122, 6).on(RGB(144, 238, 144)).bold().paint(" 2 "),
-            ),
-            (
-                '3',
-                RGB(254, 0, 0).on(RGB(144, 238, 144)).bold().paint(" 3 "),
-            ),
-            (
-                '4',
-                RGB(0, 0, 132).on(RGB(144, 238, 144)).bold().paint(" 4 "),
-            ),
-            (
-                '5',
-                RGB(130, 1, 2).on(RGB(144, 238, 144)).bold().paint(" 5 "),
-            ),
-            (
-                '6',
-                RGB(2, 127, 130).on(RGB(144, 238, 144)).bold().paint(" 6 "),
-            ),
-            ('7', RGB(0, 0, 0).on(RGB(144, 238, 144)).bold().paint(" 7 ")),
-            (
-                '8',
-                RGB(125, 125, 125)
-                    .on(RGB(144, 238, 144))
-                    .bold()
-                    .paint(" 8 "),
-            ),
-            ('#', Black.on(RGB(144, 238, 144)).bold().paint("   ")),
-            ('⚑', White.on(RGB(144, 238, 144)).bold().paint(" ⚑ ")),
-            (' ', White.on(RGB(144, 238, 144)).bold().paint("   ")),
-        ]);
-    }
-    board_objects_map.get(&character).unwrap().clone()
-}
-fn get_around_cell(
-    coords: [usize; 2],
-    board: &Vec<Vec<Cell>>,
-    settings: &Settings,
-) -> Vec<(char, usize, usize)> {
-    let mut cells: Vec<(char, usize, usize)> = vec![];
-    let iterator = [coords[0] as i32, coords[1] as i32];
-    for i in iterator[0] - 1..=iterator[0] + 1 {
-        for j in iterator[1] - 1..=iterator[1] + 1 {
-            if i >= 0 && j >= 0 && i < settings.height && j < settings.width {
-                cells.push((
-                    board[i as usize][j as usize].element,
-                    i as usize,
-                    j as usize,
-                ));
-            }
-        }
-    }
-    cells
-}
-fn place_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
-    let mut board_copy = board.clone();
-    for (row_number, row) in board.iter().enumerate() {
-        for (column_number, cell) in row.iter().enumerate() {
-            let around = get_around_cell([row_number, column_number], &board, &settings);
-            let mut number = 0;
-            for i in around.iter() {
-                if i.0 == 'M' {
-                    number += 1;
-                }
-            }
-            if cell.element != 'M' {
-                board_copy[row_number][column_number].element =
-                    char::from_digit(number, 10).expect("Fuck");
-            }
-        }
-    }
-    *board = board_copy.clone();
-}
-fn deobfuscate_board(
-    board: &mut Vec<Vec<Cell>>,
-    cell_pos: CellPos,
-    settings: &Settings,
-    hidden_cells: &mut Vec<(usize, usize)>,
-) {
-    let mut to_check = vec![];
-    if board[cell_pos.y as usize][cell_pos.x as usize].element == '0' {
-        to_check.push((cell_pos.y as usize, cell_pos.x as usize));
-    }
-    let mut next_to_check: Vec<(usize, usize)> = Vec::new();
-    let mut prev_checked: Vec<(usize, usize)> = Vec::new();
-    while !to_check.is_empty() {
-        for i in to_check.iter() {
-            let around = get_around_cell([i.0, i.1], board, &settings);
-            for j in around.iter() {
-                let curr_cell = (j.1, j.2);
-                if !prev_checked.contains(&curr_cell) {
-                    prev_checked.push(curr_cell);
-                    if j.0 == '0' {
-                        next_to_check.push(curr_cell);
-                        board[j.1][j.2].hidden = false;
-                        update_cell(
-                            board,
-                            CellPos {
-                                x: j.2 as i32,
-                                y: j.1 as i32,
-                            },
-                            settings,
-                        );
-                        hidden_cells.retain(|value| *value != (j.1, j.2));
-                    } else if j.0 != '0' && j.0 != 'M' {
-                        board[j.1][j.2].hidden = false;
-                        update_cell(
-                            board,
-                            CellPos {
-                                x: j.2 as i32,
-                                y: j.1 as i32,
-                            },
-                            settings,
-                        );
-                        hidden_cells.retain(|value| *value != (j.1, j.2));
-                    }
-                }
-            }
-        }
-        to_check = next_to_check.clone();
-        next_to_check = vec![];
-    }
-}
-fn event(
-    cell_pos: CellPos,
-    board: &mut Vec<Vec<Cell>>,
-    settings: &Settings,
-    hidden_cells: &mut Vec<(usize, usize)>,
-) -> Click {
-    let cell = board[cell_pos.y as usize][cell_pos.x as usize];
-    if cell.flagged {
-        return Click::Fine;
-    }
-    let cell_type = cell.element;
-    if cell_type == 'M' {
-        Click::Dead
-    } else if cell_type != '0' {
-        board[cell_pos.y as usize][cell_pos.x as usize].hidden = false;
-        update_cell(board, cell_pos, settings);
-        hidden_cells.retain(|value| *value != (cell_pos.y as usize, cell_pos.x as usize));
-        Click::Fine
-    } else {
-        board[cell_pos.y as usize][cell_pos.x as usize].hidden = false;
-        hidden_cells.retain(|value| *value != (cell_pos.y as usize, cell_pos.x as usize));
-        deobfuscate_board(board, cell_pos, &settings, hidden_cells);
-        Click::Fine
-    }
-}
-fn flag(board: &mut Vec<Vec<Cell>>, cell_pos: CellPos, settings: &Settings) {
-    board[cell_pos.y as usize][cell_pos.x as usize].flagged =
-        !board[cell_pos.y as usize][cell_pos.x as usize].flagged;
-    update_cell(&board, cell_pos, settings);
-}
-fn won(hidden_cells: &mut Vec<(usize, usize)>) -> bool {
-    hidden_cells.is_empty()
-}
-fn get_terminal_size() -> (i32, i32) {
-    let size = terminal_size::terminal_size().unwrap();
-    (size.0 .0 as i32, size.1 .0 as i32)
-}
+
 fn get_choice_from_user(
     mut board: &mut Vec<Vec<Cell>>,
     settings: Arc<Mutex<Settings>>,
@@ -696,22 +457,306 @@ fn get_choice_from_user(
 
     (choice, cell_pos)
 }
-fn get_settings(settings: &mut Settings) {
-    let settings_options = vec!["Play", "Difficulty", "Controls", "Appearance", "Exit"];
-    loop {
-        let setting = Select::with_theme(&ColorfulTheme::default())
-            .items(&settings_options)
-            .interact()
-            .unwrap();
-        match setting {
-            0 => break,
-            1 => select_difficulty(settings),
-            2 => select_input_type(settings),
-            3 => get_appearance_settings(settings),
-            4 => exit_gracefully(),
-            _ => {}
+
+fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords: CellPos) {
+    let cell_amount = settings.width * settings.height;
+    let mut indices: Vec<usize> = vec![];
+    for i in 0..cell_amount as usize {
+        let column_number = (i as i32) / settings.width;
+        let row_number = (i as i32) % settings.width;
+        if (starting_coords.y - column_number).abs() <= 1 {
+            if (starting_coords.x - row_number).abs() <= 1 {
+                continue;
+            }
+        }
+        indices.push(i);
+    }
+    let choices: Vec<&usize> = indices
+        .choose_multiple(&mut rand::thread_rng(), settings.mines as usize)
+        .collect();
+    for index in choices {
+        let row_index = index / settings.width as usize;
+        let column_index = index % settings.width as usize;
+        board[row_index][column_index].element = 'M';
+    }
+}
+
+fn place_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
+    let mut board_copy = board.clone();
+    for (row_number, row) in board.iter().enumerate() {
+        for (column_number, cell) in row.iter().enumerate() {
+            let around = get_around_cell([row_number, column_number], &board, &settings);
+            let mut number = 0;
+            for i in around.iter() {
+                if i.0 == 'M' {
+                    number += 1;
+                }
+            }
+            if cell.element != 'M' {
+                board_copy[row_number][column_number].element =
+                    char::from_digit(number, 10).expect("Fuck");
+            }
         }
     }
+    *board = board_copy.clone();
+}
+fn get_terminal_size() -> (i32, i32) {
+    let size = terminal_size::terminal_size().unwrap();
+    (size.0 .0 as i32, size.1 .0 as i32)
+}
+fn game_play_loop_node(
+    board: &mut Vec<Vec<Cell>>,
+    settings: &mut Settings,
+    choice: &Choice,
+    cell_pos: CellPos,
+    hidden_cells: &mut Vec<(usize, usize)>,
+) -> ControlFlow<()> {
+    match choice {
+        Choice::Exit => {
+            main_menu(settings.clone(), false);
+        }
+        Choice::Click => {
+            let terminal_size = get_terminal_size();
+            let event = event(cell_pos, board, &settings, hidden_cells);
+            match event {
+                Click::Dead => {
+                    if terminal_size.1 > settings.height + 4 {
+                        reveal_board(board, settings);
+                    } else {
+                        clear(settings);
+                    }
+                    print_string("You died.", settings);
+                    return ControlFlow::Break(());
+                }
+                Click::Fine => {}
+            }
+            if won(hidden_cells) {
+                if terminal_size.1 > settings.height + 4 {
+                    reveal_board(board, settings);
+                } else {
+                    clear(settings);
+                }
+                print_string("You win!", settings);
+                return ControlFlow::Break(());
+            }
+        }
+    };
+    ControlFlow::Continue(())
+}
+pub fn print_string(string: &str, settings: &mut Settings) {
+    let mut string_x_pos = settings.board_x_pos as u16;
+    if settings.bordered {
+        string_x_pos = (string_x_pos as i32 - 1).max(0) as u16;
+    }
+    if settings.centered {
+        string_x_pos = (string_x_pos as i32 - (string.len() / 2) as i32 + (settings.width * 3) / 2)
+            .max(0) as u16;
+    }
+    let mut string_y_pos = settings.str_y_pos as u16;
+    if settings.showing_board {
+        string_y_pos +=
+            (settings.board_y_pos as i32 + settings.height + settings.bordered as i32) as u16;
+    }
+    stdout()
+        .execute(MoveTo(string_x_pos, string_y_pos))
+        .unwrap();
+    print!("{}", string);
+    settings.str_y_pos += 1;
+}
+
+fn update_cell(board: &Vec<Vec<Cell>>, cell_pos: CellPos, settings: &Settings) {
+    let mut x_pos: u16 = (cell_pos.x * 3) as u16;
+    let mut y_pos: u16 = (cell_pos.y) as u16;
+    x_pos += settings.board_x_pos as u16;
+    y_pos += settings.board_y_pos as u16;
+    let terminal_size = get_terminal_size();
+    if x_pos as i32 >= terminal_size.0 {
+        return;
+    }
+    if y_pos as i32 >= terminal_size.0 {
+        return;
+    }
+    stdout().execute(MoveTo(x_pos, y_pos)).unwrap();
+    display_cell(&board[cell_pos.y as usize][cell_pos.x as usize]);
+}
+fn display_cell(cell: &Cell) {
+    let display_string;
+    if cell.flagged == false {
+        if cell.hidden == true {
+            display_string = get_display_string('#', cell.selected);
+        } else {
+            if cell.element == '0' {
+                display_string = get_display_string(' ', cell.selected);
+            } else {
+                display_string = get_display_string(cell.element, cell.selected);
+            }
+        }
+    } else {
+        display_string = get_display_string('⚑', cell.selected);
+    }
+    print!("{display_string}");
+}
+fn get_display_string(character: char, is_selected: bool) -> ANSIGenericString<'static, str> {
+    let board_objects_map: HashMap<char, ANSIGenericString<'static, str>>;
+    if !is_selected {
+        board_objects_map = HashMap::from([
+            ('M', RGB(0, 0, 0).on(White).bold().paint(" ✹ ")),
+            ('1', RGB(6, 3, 255).on(White).bold().paint(" 1 ")),
+            ('2', RGB(3, 122, 6).on(White).bold().paint(" 2 ")),
+            ('3', RGB(254, 0, 0).on(White).bold().paint(" 3 ")),
+            ('4', RGB(0, 0, 132).on(White).bold().paint(" 4 ")),
+            ('5', RGB(130, 1, 2).on(White).bold().paint(" 5 ")),
+            ('6', RGB(2, 127, 130).on(White).bold().paint(" 6 ")),
+            ('7', RGB(0, 0, 0).on(White).bold().paint(" 7 ")),
+            ('8', RGB(125, 125, 125).on(White).bold().paint(" 8 ")),
+            ('#', Black.on(Black).bold().paint("   ")),
+            ('⚑', White.on(Black).bold().paint(" ⚑ ")),
+            (' ', White.on(White).bold().paint("   ")),
+        ]);
+    } else {
+        board_objects_map = HashMap::from([
+            ('M', RGB(0, 0, 0).on(RGB(144, 238, 144)).bold().paint(" ✹ ")),
+            (
+                '1',
+                RGB(6, 3, 255).on(RGB(144, 238, 144)).bold().paint(" 1 "),
+            ),
+            (
+                '2',
+                RGB(3, 122, 6).on(RGB(144, 238, 144)).bold().paint(" 2 "),
+            ),
+            (
+                '3',
+                RGB(254, 0, 0).on(RGB(144, 238, 144)).bold().paint(" 3 "),
+            ),
+            (
+                '4',
+                RGB(0, 0, 132).on(RGB(144, 238, 144)).bold().paint(" 4 "),
+            ),
+            (
+                '5',
+                RGB(130, 1, 2).on(RGB(144, 238, 144)).bold().paint(" 5 "),
+            ),
+            (
+                '6',
+                RGB(2, 127, 130).on(RGB(144, 238, 144)).bold().paint(" 6 "),
+            ),
+            ('7', RGB(0, 0, 0).on(RGB(144, 238, 144)).bold().paint(" 7 ")),
+            (
+                '8',
+                RGB(125, 125, 125)
+                    .on(RGB(144, 238, 144))
+                    .bold()
+                    .paint(" 8 "),
+            ),
+            ('#', Black.on(RGB(144, 238, 144)).bold().paint("   ")),
+            ('⚑', White.on(RGB(144, 238, 144)).bold().paint(" ⚑ ")),
+            (' ', White.on(RGB(144, 238, 144)).bold().paint("   ")),
+        ]);
+    }
+    board_objects_map.get(&character).unwrap().clone()
+}
+fn get_around_cell(
+    coords: [usize; 2],
+    board: &Vec<Vec<Cell>>,
+    settings: &Settings,
+) -> Vec<(char, usize, usize)> {
+    let mut cells: Vec<(char, usize, usize)> = vec![];
+    let iterator = [coords[0] as i32, coords[1] as i32];
+    for i in iterator[0] - 1..=iterator[0] + 1 {
+        for j in iterator[1] - 1..=iterator[1] + 1 {
+            if i >= 0 && j >= 0 && i < settings.height && j < settings.width {
+                cells.push((
+                    board[i as usize][j as usize].element,
+                    i as usize,
+                    j as usize,
+                ));
+            }
+        }
+    }
+    cells
+}
+fn deobfuscate_board(
+    board: &mut Vec<Vec<Cell>>,
+    cell_pos: CellPos,
+    settings: &Settings,
+    hidden_cells: &mut Vec<(usize, usize)>,
+) {
+    let mut to_check = vec![];
+    if board[cell_pos.y as usize][cell_pos.x as usize].element == '0' {
+        to_check.push((cell_pos.y as usize, cell_pos.x as usize));
+    }
+    let mut next_to_check: Vec<(usize, usize)> = Vec::new();
+    let mut prev_checked: Vec<(usize, usize)> = Vec::new();
+    while !to_check.is_empty() {
+        for i in to_check.iter() {
+            let around = get_around_cell([i.0, i.1], board, &settings);
+            for j in around.iter() {
+                let curr_cell = (j.1, j.2);
+                if !prev_checked.contains(&curr_cell) {
+                    prev_checked.push(curr_cell);
+                    if j.0 == '0' {
+                        next_to_check.push(curr_cell);
+                        board[j.1][j.2].hidden = false;
+                        update_cell(
+                            board,
+                            CellPos {
+                                x: j.2 as i32,
+                                y: j.1 as i32,
+                            },
+                            settings,
+                        );
+                        hidden_cells.retain(|value| *value != (j.1, j.2));
+                    } else if j.0 != '0' && j.0 != 'M' {
+                        board[j.1][j.2].hidden = false;
+                        update_cell(
+                            board,
+                            CellPos {
+                                x: j.2 as i32,
+                                y: j.1 as i32,
+                            },
+                            settings,
+                        );
+                        hidden_cells.retain(|value| *value != (j.1, j.2));
+                    }
+                }
+            }
+        }
+        to_check = next_to_check.clone();
+        next_to_check = vec![];
+    }
+}
+fn event(
+    cell_pos: CellPos,
+    board: &mut Vec<Vec<Cell>>,
+    settings: &Settings,
+    hidden_cells: &mut Vec<(usize, usize)>,
+) -> Click {
+    let cell = board[cell_pos.y as usize][cell_pos.x as usize];
+    if cell.flagged {
+        return Click::Fine;
+    }
+    let cell_type = cell.element;
+    if cell_type == 'M' {
+        Click::Dead
+    } else if cell_type != '0' {
+        board[cell_pos.y as usize][cell_pos.x as usize].hidden = false;
+        update_cell(board, cell_pos, settings);
+        hidden_cells.retain(|value| *value != (cell_pos.y as usize, cell_pos.x as usize));
+        Click::Fine
+    } else {
+        board[cell_pos.y as usize][cell_pos.x as usize].hidden = false;
+        hidden_cells.retain(|value| *value != (cell_pos.y as usize, cell_pos.x as usize));
+        deobfuscate_board(board, cell_pos, &settings, hidden_cells);
+        Click::Fine
+    }
+}
+fn flag(board: &mut Vec<Vec<Cell>>, cell_pos: CellPos, settings: &Settings) {
+    board[cell_pos.y as usize][cell_pos.x as usize].flagged =
+        !board[cell_pos.y as usize][cell_pos.x as usize].flagged;
+    update_cell(&board, cell_pos, settings);
+}
+fn won(hidden_cells: &mut Vec<(usize, usize)>) -> bool {
+    hidden_cells.is_empty()
 }
 fn get_appearance_settings(settings: &mut Settings) {
     let appearance_options = vec!["Centered", "Bordered"];
@@ -739,25 +784,6 @@ fn get_appearance_settings(settings: &mut Settings) {
         }
     }
     center_board(settings);
-}
-fn center_board(settings: &mut Settings) {
-    let terminal_size = get_terminal_size();
-    if settings.centered {
-        settings.board_x_pos = ((terminal_size.0 / 2 - (settings.width * 3) / 2).max(0)) as u32;
-        settings.board_y_pos = ((terminal_size.1 / 2 - settings.height / 2).max(0)) as u32;
-        if settings.bordered {
-            settings.board_x_pos = (settings.board_x_pos as i32 - 1).max(1) as u32;
-            settings.board_y_pos = (settings.board_y_pos as i32 - 1).max(1) as u32;
-        }
-    } else {
-        if settings.bordered {
-            settings.board_x_pos = 1;
-            settings.board_y_pos = 1;
-        } else {
-            settings.board_x_pos = 0;
-            settings.board_y_pos = 0;
-        }
-    }
 }
 fn select_input_type(settings: &mut Settings) {
     let input_options = vec!["Mouse", "Keyboard"];
