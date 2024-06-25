@@ -30,7 +30,7 @@ Once Rust is installed, follow these steps:
 1. Clone this repository to your local machine:
 
    ```
-   git clone https://github.com/AidenPierce616/rustsweeper.git
+   git clone https://github.com/SunilPaul174/rustsweeper.git
    ```
 
 2. Navigate into the project directory:
