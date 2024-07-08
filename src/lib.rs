@@ -137,14 +137,12 @@ fn center_board(settings: &mut Settings) {
             settings.board_x_pos = (settings.board_x_pos as i32 - 1).max(1) as u32;
             settings.board_y_pos = (settings.board_y_pos as i32 - 1).max(1) as u32;
         }
+    } else if settings.bordered {
+        settings.board_x_pos = 1;
+        settings.board_y_pos = 1;
     } else {
-        if settings.bordered {
-            settings.board_x_pos = 1;
-            settings.board_y_pos = 1;
-        } else {
-            settings.board_x_pos = 0;
-            settings.board_y_pos = 0;
-        }
+        settings.board_x_pos = 0;
+        settings.board_y_pos = 0;
     }
 }
 
@@ -214,9 +212,8 @@ fn display_board(board: &Vec<Vec<Cell>>, settings: &mut Settings) {
 fn draw_y(settings: &mut Settings, i: i32, j: i32, terminal_size: (i32, i32)) {
     let mut move_to_x = settings.board_x_pos as i32 - 1;
     let move_to_y = settings.board_y_pos as i32 + i;
-    match j {
-        1 => move_to_x += settings.width * 3 + 1,
-        _ => {}
+    if j == 1 {
+        move_to_x += settings.width * 3 + 1
     }
     if move_to_x >= 0
         && move_to_x < terminal_size.0
@@ -249,9 +246,8 @@ fn draw_y(settings: &mut Settings, i: i32, j: i32, terminal_size: (i32, i32)) {
 fn draw_x(settings: &mut Settings, i: i32, j: i32, terminal_size: (i32, i32)) {
     let move_to_x = settings.board_x_pos as i32 + i * 3;
     let mut move_to_y = settings.board_y_pos as i32 - 1;
-    match j {
-        1 => move_to_y += settings.height + 1,
-        _ => {}
+    if j == 1 {
+        move_to_y += settings.height + 1
     }
     if move_to_x >= 0
         && move_to_x < terminal_size.0
@@ -274,7 +270,7 @@ fn get_choice_from_user(
     let mut previous_select_pos = cell_pos;
     let settings_mutex: Arc<Mutex<Settings>> = Arc::clone(&settings);
 
-    let mut mouse_pos = cell_pos.convert(&mut settings_mutex.lock().unwrap());
+    let mut mouse_pos = cell_pos.convert(&settings_mutex.lock().unwrap());
     let choice: Choice;
     let thread_flag = Arc::new(AtomicBool::new(false));
     let flag_clone = thread_flag.clone();
@@ -285,19 +281,16 @@ fn get_choice_from_user(
     let handle = thread::spawn(move || {
         let mut board_copy: Option<Vec<Vec<Cell>>> = None;
         while !flag_clone.load(Ordering::Relaxed) {
-            match rx.try_recv() {
-                Ok(received_data) => {
-                    board_copy = Some(received_data);
-                }
-                Err(_) => {}
-            }
+            if let Ok(received_data) = rx.try_recv() {
+                board_copy = Some(received_data)
+            };
             let new_terminal_size = get_terminal_size();
             if terminal_size != new_terminal_size {
                 clear(&mut cloned_mutex.lock().unwrap());
                 terminal_size = new_terminal_size;
                 if let Some(ref board_copy) = board_copy {
                     center_board(&mut cloned_mutex.lock().unwrap());
-                    display_board(&board_copy, &mut cloned_mutex.lock().unwrap());
+                    display_board(board_copy, &mut cloned_mutex.lock().unwrap());
                 }
             }
         }
@@ -387,7 +380,7 @@ fn get_choice_from_user(
                 code: KeyCode::Char('f'),
                 kind: KeyEventKind::Press,
                 ..
-            }) => flag(&mut board, cell_pos, &settings_mutex.lock().unwrap()),
+            }) => flag(board, cell_pos, &settings_mutex.lock().unwrap()),
             Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 kind: KeyEventKind::Press,
@@ -443,11 +436,11 @@ fn get_choice_from_user(
             _ => {}
         }
         if cell_pos != previous_select_pos {
-            let mut settings_guard = settings_mutex.lock().unwrap();
+            let settings_guard = settings_mutex.lock().unwrap();
             board[previous_select_pos.y as usize][previous_select_pos.x as usize].selected = false;
-            update_cell(&board, previous_select_pos, &mut settings_guard);
+            update_cell(board, previous_select_pos, &settings_guard);
             board[cell_pos.y as usize][cell_pos.x as usize].selected = true;
-            update_cell(&board, cell_pos, &mut settings_guard);
+            update_cell(board, cell_pos, &settings_guard);
             previous_select_pos = cell_pos;
             tx.send(board.clone()).unwrap();
             drop(settings_guard);
@@ -467,10 +460,10 @@ fn place_mines(board: &mut Vec<Vec<Cell>>, settings: &Settings, starting_coords:
     for i in 0..cell_amount as usize {
         let column_number = (i as i32) / settings.width;
         let row_number = (i as i32) % settings.width;
-        if (starting_coords.y - column_number).abs() <= 1 {
-            if (starting_coords.x - row_number).abs() <= 1 {
-                continue;
-            }
+        if (starting_coords.y - column_number).abs() <= 1
+            && (starting_coords.x - row_number).abs() <= 1
+        {
+            continue;
         }
         indices.push(i);
     }
@@ -488,7 +481,7 @@ fn place_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
     let mut board_copy = board.clone();
     for (row_number, row) in board.iter().enumerate() {
         for (column_number, cell) in row.iter().enumerate() {
-            let around = get_around_cell([row_number, column_number], &board, &settings);
+            let around = get_around_cell([row_number, column_number], board, settings);
             let mut number = 0;
             for i in around.iter() {
                 if i.0 == 'M' {
@@ -501,7 +494,7 @@ fn place_numbers(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
             }
         }
     }
-    *board = board_copy.clone();
+    board.clone_from(&board_copy);
 }
 fn get_terminal_size() -> (i32, i32) {
     let size = terminal_size::terminal_size().unwrap();
@@ -516,11 +509,11 @@ fn game_play_loop_node(
 ) -> ControlFlow<()> {
     match choice {
         Choice::Exit => {
-            main_menu(settings.clone(), false);
+            main_menu(*settings, false);
         }
         Choice::Click => {
             let terminal_size = get_terminal_size();
-            let event = event(cell_pos, board, &settings, hidden_cells);
+            let event = event(cell_pos, board, settings, hidden_cells);
             match event {
                 Click::Dead => {
                     if terminal_size.1 > settings.height + 4 {
@@ -584,15 +577,13 @@ fn update_cell(board: &Vec<Vec<Cell>>, cell_pos: CellPos, settings: &Settings) {
 }
 fn display_cell(cell: &Cell) {
     let display_string;
-    if cell.flagged == false {
-        if cell.hidden == true {
+    if !cell.flagged {
+        if cell.hidden {
             display_string = get_display_string('#', cell.selected);
+        } else if cell.element == '0' {
+            display_string = get_display_string(' ', cell.selected);
         } else {
-            if cell.element == '0' {
-                display_string = get_display_string(' ', cell.selected);
-            } else {
-                display_string = get_display_string(cell.element, cell.selected);
-            }
+            display_string = get_display_string(cell.element, cell.selected);
         }
     } else {
         display_string = get_display_string('⚑', cell.selected);
@@ -692,7 +683,7 @@ fn deobfuscate_board(
     let mut prev_checked: Vec<(usize, usize)> = Vec::new();
     while !to_check.is_empty() {
         for i in to_check.iter() {
-            let around = get_around_cell([i.0, i.1], board, &settings);
+            let around = get_around_cell([i.0, i.1], board, settings);
             for j in around.iter() {
                 let curr_cell = (j.1, j.2);
                 if !prev_checked.contains(&curr_cell) {
@@ -724,7 +715,7 @@ fn deobfuscate_board(
                 }
             }
         }
-        to_check = next_to_check.clone();
+        to_check.clone_from(&next_to_check);
         next_to_check = vec![];
     }
 }
@@ -749,14 +740,14 @@ fn event(
     } else {
         board[cell_pos.y as usize][cell_pos.x as usize].hidden = false;
         hidden_cells.retain(|value| *value != (cell_pos.y as usize, cell_pos.x as usize));
-        deobfuscate_board(board, cell_pos, &settings, hidden_cells);
+        deobfuscate_board(board, cell_pos, settings, hidden_cells);
         Click::Fine
     }
 }
 fn flag(board: &mut Vec<Vec<Cell>>, cell_pos: CellPos, settings: &Settings) {
     board[cell_pos.y as usize][cell_pos.x as usize].flagged =
         !board[cell_pos.y as usize][cell_pos.x as usize].flagged;
-    update_cell(&board, cell_pos, settings);
+    update_cell(board, cell_pos, settings);
 }
 fn won(hidden_cells: &mut Vec<(usize, usize)>) -> bool {
     hidden_cells.is_empty()
@@ -894,7 +885,7 @@ fn reveal_board(board: &mut Vec<Vec<Cell>>, settings: &Settings) {
     }
     for cell in cells_to_update {
         update_cell(
-            &board,
+            board,
             CellPos {
                 x: cell.1,
                 y: cell.0,
@@ -970,7 +961,7 @@ pub fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
                 as u16;
         } else {
             y_pos = settings.str_y_pos as u16;
-            settings.str_y_pos = settings.str_y_pos + options.len() as u32;
+            settings.str_y_pos += options.len() as u32;
         }
         if !settings.centered && y_pos < terminal_size.1 as u16 - options.len() as u16 {
             stdout().execute(MoveTo(0, y_pos)).unwrap();
@@ -982,8 +973,8 @@ pub fn main_menu(mut settings: Settings, go_directly_to_game: bool) {
             .interact()
             .unwrap();
         match choice {
-            0 => main_menu(settings.clone(), true),
-            1 => main_menu(settings.clone(), false),
+            0 => main_menu(settings, true),
+            1 => main_menu(settings, false),
             2 => exit_gracefully(),
             _ => {}
         }
